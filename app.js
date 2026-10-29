@@ -1,0 +1,925 @@
+/* Fälle Trainer: rendering and practice logic. Data lives in data.js. */
+(() => {
+'use strict';
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const app = $('#app');
+const rnd = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const uniq = a => [...new Set(a)];
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const tag = (c, text) => `<span class="ct ct-${c}">${text || CASES[c].name}</span>`;
+const hl = (c, text) => `<b class="c-${c}">${text}</b>`;
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('faelle.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('faelle.' + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
+};
+const settings = Object.assign({ answer: 'choice', gen: true, gender: true, mode: 'who' }, store.get('settings', {}));
+const saveSettings = () => store.set('settings', settings);
+
+/* ---------- Perspective helpers ---------- */
+
+function pronKey(pid, lid) {
+  if (pid === 'me') return 'ich';
+  if (pid === 'us') return 'wir';
+  if (pid === lid) return LISTENERS[lid].pron;
+  return PEOPLE[pid].pron3;
+}
+const poolFor = lid => Object.keys(PEOPLE).filter(id => !LISTENERS[lid].excludes.includes(id));
+const personRole = (pid, lid) => (pid === 'me' || pid === 'us') ? 1 : pid === lid ? 2 : 3;
+const ROLE_LABEL = { 1: '1st person', 2: '2nd person', 3: '3rd person' };
+function relation(pid, lid) {
+  if (pid === 'me') return 'that’s you, the speaker';
+  if (pid === 'us') return 'you + someone else';
+  if (pid === lid) return 'the person you are talking to';
+  return 'someone you are talking about';
+}
+const personLabel = pid => `${PEOPLE[pid].emoji} ${PEOPLE[pid].name}`;
+const nounLabel = n => `${GENDERS[n.g].art} ${n.n}${n.g === 'pl' ? ' (pl.)' : ''}`;
+
+function pronExamples(key) {
+  const P = PRONOUNS[key];
+  return {
+    nom: `${hl('nom', cap(P.nom))} ${CONJ.sein[key]} hier.`,
+    akk: `Der Lehrer sieht ${hl('akk', P.akk)}.`,
+    dat: `Der Lehrer hilft ${hl('dat', P.dat)}.`,
+    gen: `<span class="muted">rare today, old-fashioned style</span>`,
+  };
+}
+
+function possExamples(stem, item) {
+  const pl = item.g === 'pl';
+  const f = c => `${hl(c, possForm(stem, c, item.g))} ${nounForm(item, c)}`;
+  return {
+    nom: `Das ${pl ? 'sind' : 'ist'} ${f('nom')}.`,
+    akk: `Ich sehe ${f('akk')}.`,
+    dat: `Was ist mit ${f('dat')} los?`,
+    gen: item.anim
+      ? (pl ? `Die Namen ${f('gen')} sind schön.` : `Der Name ${f('gen')} ist schön.`)
+      : `Die Farbe ${f('gen')} gefällt mir.`,
+  };
+}
+
+function possTable(stem, hiGender, withNouns) {
+  const sample = { m: 'Hund', f: 'Katze', n: 'Auto', pl: 'Kinder' };
+  const sampleDat = { pl: 'Kindern' };
+  const sampleGen = { m: 'Hundes', n: 'Autos' };
+  let h = `<div class="tw"><table><thead><tr><th></th>${GENDER_KEYS.map(g => `<th class="${g === hiGender ? 'hlcol' : ''}">${GENDERS[g].name}<span class="sub">${GENDERS[g].art} ${withNouns ? sample[g] : ''}</span></th>`).join('')}</tr></thead><tbody>`;
+  for (const c of CASE_KEYS) {
+    h += `<tr class="row-${c}"><th>${CASES[c].name}<span class="sub">${CASES[c].q}</span></th>`;
+    for (const g of GENDER_KEYS) {
+      const form = possForm(stem, c, g);
+      const end = POSS_END[c][g];
+      const shown = end ? `${form.slice(0, form.length - end.length)}<span class="end">${end}</span>` : form;
+      let noun = '';
+      if (withNouns) noun = ' ' + ((c === 'dat' && sampleDat[g]) || (c === 'gen' && sampleGen[g]) || sample[g]);
+      h += `<td class="f ${g === hiGender ? 'hlcol' : ''}">${shown}<span class="sub">${noun}</span></td>`;
+    }
+    h += '</tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+
+/* ---------- Routing ---------- */
+
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, tables: renderTables, practice: renderPractice };
+function route() {
+  const r = location.hash.slice(1).split('/')[0] || 'cases';
+  const key = ROUTES[r] ? r : 'cases';
+  $$('nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + key));
+  ROUTES[key]();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+
+/* =========================================================
+   CASES (learn)
+   ========================================================= */
+
+function renderCases() {
+  const cardEx = {
+    nom: { s: '<mark class="c-nom">Der Hund</mark> schläft.', a: '<i>Wer schläft?</i> → der Hund' },
+    akk: { s: 'Ich sehe <mark class="c-akk">den Hund</mark>.', a: '<i>Wen sehe ich?</i> → den Hund' },
+    dat: { s: 'Ich gebe <mark class="c-dat">dem Hund</mark> Wasser.', a: '<i>Wem gebe ich Wasser?</i> → dem Hund' },
+    gen: { s: 'Das ist der Ball <mark class="c-gen">des Hundes</mark>.', a: '<i>Wessen Ball?</i> → des Hundes' },
+  };
+  const cards = CASE_KEYS.map(c => `
+    <div class="case-card ${c}">
+      <div class="nm c-${c}">${CASES[c].name}</div>
+      <div class="qq">${CASES[c].q}</div>
+      <div class="rl">${CASES[c].role}</div>
+      <div class="arts">${GENDER_KEYS.map(g => DEF_ART[c][g]).join(' · ')}</div>
+      <div class="ex">${cardEx[c].s}<br><small>${cardEx[c].a}</small></div>
+    </div>`).join('');
+
+  const prepRow = (k, label, c) => `<div class="prep-row">${c ? tag(c, label) : `<span class="ct ct-dat" style="background:linear-gradient(90deg,var(--dat-bg),var(--akk-bg));color:var(--text)">${label}</span>`} ${PREPS[k].map(p => `<span class="pill">${p}</span>`).join('')}</div>`;
+
+  const colored = COLOR_EXAMPLES.map((parts, i) => `<div class="colored">${parts.map((p, j) =>
+    typeof p === 'string' ? p : `<button class="chunk ${p[1]}" data-i="${i}" data-j="${j}">${p[0]}</button>`).join('')}</div>`).join('');
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>The 4 German cases</h2>
+    <p class="lead">To find which case a noun or pronoun needs, <b>ask a question about it</b>. The question word tells you the case.</p>
+    <div class="case-cards">${cards}</div>
+  </section>
+
+  <section class="card">
+    <h2>How to find the case, step by step</h2>
+    <ol class="steps">
+      <li><b>Is there a preposition in front of it?</b> Then the preposition decides. It beats everything else.
+        ${prepRow('akk', 'always Akk', 'akk')}
+        ${prepRow('dat', 'always Dat', 'dat')}
+        ${prepRow('two', 'Wo? → Dat · Wohin? → Akk')}
+        ${prepRow('gen', 'Genitiv', 'gen')}
+      </li>
+      <li><b>Find the verb, then ask <i>Wer? / Was?</i></b> Who or what is doing it? That is the subject → ${tag('nom')}. The verb ending matches this word (ich bin, du bist, er ist …).</li>
+      <li><b>Ask <i>Wen? / Was?</i></b> Who or what does the action hit directly? → ${tag('akk')}.</li>
+      <li><b>Ask <i>Wem?</i></b> To or for whom? Who receives something? → ${tag('dat')}.
+        <div class="prep-row"><small>These verbs always take Dativ:</small> ${DAT_VERBS.map(v => `<span class="pill">${v}</span>`).join('')}</div>
+        <div class="prep-row"><small>Give / show verbs: person = Dat, thing = Akk:</small> ${DAT_AKK_VERBS.map(v => `<span class="pill">${v}</span>`).join('')}</div>
+      </li>
+      <li><b>Ask <i>Wessen?</i></b> Whose? → ${tag('gen')}. In everyday speech people often say <i>von + Dativ</i> instead (das Auto von meinem Vater).</li>
+    </ol>
+    <div class="tips">
+      <div class="tip"><b>Only masculine really changes in Akk</b>der → den, ein → einen, mein → meinen. Feminine, neuter and plural stay the same as Nominativ.</div>
+      <div class="tip"><b>The "der-test" for Was?</b><i>Was</i> can be Nom or Akk. Swap the thing for a masculine noun: if you'd say <i>der</i> it's Nom, if <i>den</i> it's Akk.</div>
+      <div class="tip"><b>sein · werden · bleiben</b>Nominativ on both sides: <i>Das ist <u>ein</u> Tisch. Er wird <u>ein</u> Arzt.</i></div>
+      <div class="tip"><b>Dativ plural adds -n</b>die Kinder → mit den Kinder<u>n</u>. (Not if the plural already ends in -n or -s.)</div>
+      <div class="tip"><b>Short forms</b>im = in dem · ins = in das · am = an dem · zum = zu dem · zur = zu der · beim = bei dem · vom = von dem</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>See it in real sentences</h2>
+    <p class="muted">Tap a coloured part to see the question it answers.</p>
+    ${colored}
+    <div class="chunk-out" id="chunkOut"><span class="muted">← pick a coloured part</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Two-way prepositions: Wo? or Wohin?</h2>
+    <p class="muted">an, auf, hinter, in, neben, über, unter, vor, zwischen can take Dativ or Akkusativ. Ask yourself one question:</p>
+    <div class="wowohin">
+      <div class="ww dat"><div class="big c-dat">Wo? → Dativ</div><div class="pic">📕▬</div><p>Location, no change of place.<br><b>Das Buch liegt auf <span class="c-dat">dem</span> Tisch.</b><br><b>Ich bin in <span class="c-dat">der</span> Stadt.</b></p></div>
+      <div class="ww akk"><div class="big c-akk">Wohin? → Akkusativ</div><div class="pic">📕➜▬</div><p>Movement / direction to a goal.<br><b>Ich lege das Buch auf <span class="c-akk">den</span> Tisch.</b><br><b>Ich gehe in <span class="c-akk">die</span> Stadt.</b></p></div>
+    </div>
+  </section>`;
+}
+
+app.addEventListener('click', onChunk);
+function onChunk(e) {
+  const b = e.target.closest('.chunk');
+  if (!b || !$('#chunkOut')) return;
+  const p = COLOR_EXAMPLES[b.dataset.i][b.dataset.j];
+  $$('.chunk').forEach(x => x.classList.toggle('on', x === b));
+  $('#chunkOut').innerHTML = `<span style="font-size:1.15rem"><i>${p[2]}</i></span> → <b>${p[0]}</b> → ${tag(p[1])}<br><small>${CASES[p[1]].role}</small>`;
+}
+
+/* =========================================================
+   WHO IS WHO (perspective)
+   ========================================================= */
+
+const persp = { listener: 'anna', sel: 'tom' };
+
+function pcard(pid) {
+  const r = personRole(pid, persp.listener);
+  const key = pronKey(pid, persp.listener);
+  const item = PEOPLE[pid].item;
+  return `<button class="pcard r${r} ${persp.sel === pid ? 'sel' : ''}" data-p="${pid}">
+    <span class="badge">${ROLE_LABEL[r]}</span>
+    <div class="emo">${PEOPLE[pid].emoji}</div>
+    <div class="nm">${PEOPLE[pid].name}</div>
+    <div class="pr">${PRONOUNS[key].nom}</div>
+    <div class="it">${item.e} ${possForm(PRONOUNS[key].poss, 'nom', item.g)} ${item.n}</div>
+  </button>`;
+}
+
+function renderPerspective() {
+  const L = persp.listener;
+  const pool = poolFor(L);
+  if (!pool.includes(persp.sel)) persp.sel = L;
+  const others = pool.filter(p => p !== 'me' && p !== 'us' && p !== L);
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Who is who, from your point of view</h2>
+    <p class="lead">You are always <b>ich</b>. The person you talk <b>to</b> is <b>du / ihr / Sie</b>. Everyone you talk <b>about</b> is <b>er / sie / es / sie</b>. Change who you're talking to and watch the pronouns change.</p>
+    <div class="ctl-row"><span>Who are you talking to?</span>
+      <div class="seg" id="lseg">${Object.keys(LISTENERS).map(k => `<button data-l="${k}" class="${k === L ? 'on' : ''}">${LISTENERS[k].label} <small>(${LISTENERS[k].desc})</small></button>`).join('')}</div>
+    </div>
+    <div class="talk">
+      ${pcard('me')}
+      <div class="arrow"><span class="bubble">💬</span>talking to →</div>
+      ${pcard(L)}
+    </div>
+    <h4>People you talk about</h4>
+    <div class="pgrid">${others.map(pcard).join('')}</div>
+    <h4>A group that includes you</h4>
+    <div class="pgrid">${pcard('us')}</div>
+    <p class="muted" style="margin-top:12px">Tap anyone to see all their forms and what belongs to them.</p>
+  </section>
+  <section class="card" id="detail">${personDetail(persp.sel)}</section>
+  <section class="card">
+    <h2>How to address people: du, ihr or Sie?</h2>
+    <div class="addr">
+      <div><div class="w">du</div><b>One person you know well.</b><br>Friends, family, partner, children, animals, classmates, often young colleagues.<br><small>du · dich · dir · <b>dein</b></small></div>
+      <div><div class="w">ihr</div><b>Two or more people you'd each say du to.</b><br>Your friends, your parents, a group of kids.<br><small>ihr · euch · euch · <b>euer</b></small></div>
+      <div><div class="w">Sie</div><b>One or more people, formal.</b><br>Adult strangers, your boss, doctors, officials, shop staff, older people. <b>Always capital S</b>, verb like "they": <i>Sie sind</i>.<br><small>Sie · Sie · Ihnen · <b>Ihr</b></small></div>
+    </div>
+    <div class="tips">
+      <div class="tip"><b>Not sure?</b>Use Sie. People will offer the du: <i>„Wollen wir uns duzen?“</i></div>
+      <div class="tip"><b>er / sie / es also mean "it"</b>Things follow their grammatical gender: der Tisch → <b>er</b>, die Lampe → <b>sie</b>, das Bild → <b>es</b>.</div>
+      <div class="tip"><b>sie, sie or Sie?</b>sie + ist = she. sie + sind = they. Sie + sind (capital) = formal you.</div>
+    </div>
+  </section>`;
+
+  $('#lseg').addEventListener('click', e => {
+    const b = e.target.closest('button[data-l]');
+    if (!b) return;
+    persp.listener = b.dataset.l;
+    renderPerspective();
+  });
+  $$('.pcard').forEach(b => b.addEventListener('click', () => {
+    persp.sel = b.dataset.p;
+    $$('.pcard').forEach(x => x.classList.toggle('sel', x.dataset.p === persp.sel));
+    $('#detail').innerHTML = personDetail(persp.sel);
+    $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+}
+
+function personDetail(pid) {
+  const L = persp.listener;
+  const key = pronKey(pid, L);
+  const P = PRONOUNS[key];
+  const person = PEOPLE[pid];
+  const item = person.item;
+  const pe = pronExamples(key);
+  const xe = possExamples(P.poss, item);
+
+  let changeNote = '';
+  if (pid === 'me') changeNote = 'You are always <b>ich</b>, no matter who you talk to.';
+  else if (pid === 'us') changeNote = '<b>wir</b> = you + anyone else. It never changes.';
+  else {
+    const asListener = Object.keys(LISTENERS).find(l => l === pid);
+    const to = asListener ? PRONOUNS[LISTENERS[pid].pron].nom : (person.pron3 === 'siePl' ? 'ihr / Sie' : 'du / Sie');
+    changeNote = `Talking <b>to</b> ${person.name}: <b>${to}</b> · talking <b>about</b> ${person.name}: <b>${PRONOUNS[person.pron3].nom}</b>`;
+  }
+
+  return `
+    <h2>${person.emoji} ${person.name} = <span style="color:var(--p${personRole(pid, L)})">${P.label}</span> <small>(${P.en})</small></h2>
+    <p class="muted">${cap(person.role)}, ${relation(pid, L)}. ${changeNote}</p>
+    <h4>Personal pronoun in every case</h4>
+    <div class="forms4">${CASE_KEYS.map(c => `
+      <div class="fcell ${c}"><div class="lab">${CASES[c].name} · ${CASES[c].q}</div><div class="big">${P[c]}</div><div class="ex">${pe[c]}</div></div>`).join('')}
+    </div>
+    <h4>What belongs to ${person.name}: ${item.e} ${nounLabel(item)} → ${P.poss}- <small>(${P.possEn})</small></h4>
+    <div class="forms4">${CASE_KEYS.map(c => `
+      <div class="fcell ${c}"><div class="lab">${CASES[c].name} · ${CASES[c].q}</div><div class="big">${possForm(P.poss, c, item.g)}</div><div class="ex">${xe[c]}</div></div>`).join('')}
+    </div>
+    <h4>All forms of ${P.poss}- <small>(highlighted: ${GENDERS[item.g].name}, like ${item.n})</small></h4>
+    ${possTable(P.poss, item.g, true)}`;
+}
+
+/* =========================================================
+   ADJECTIVE helpers (shared by learn, tables and practice)
+   ========================================================= */
+
+const findNoun = (list, n) => list.find(x => x.n === n);
+const ADJ_SAMPLE = {
+  def: { adj: 'alt', nouns: { m: findNoun(NOUNS, 'Hund'), f: findNoun(NOUNS, 'Katze'), n: findNoun(NOUNS, 'Auto'), pl: findNoun(NOUNS, 'Kinder') } },
+  indef: { adj: 'alt', nouns: { m: findNoun(NOUNS, 'Hund'), f: findNoun(NOUNS, 'Katze'), n: findNoun(NOUNS, 'Auto'), pl: findNoun(NOUNS, 'Kinder') } },
+  none: { adj: 'gut', nouns: { m: findNoun(MASS_NOUNS, 'Wein'), f: findNoun(MASS_NOUNS, 'Milch'), n: findNoun(MASS_NOUNS, 'Wasser'), pl: findNoun(MASS_NOUNS, 'Äpfel') } },
+};
+
+function adjArticle(type, c, g, stem) {
+  if (type === 'def') return DEF_ART[c][g];
+  if (type === 'indef') return possForm(stem || 'mein', c, g);
+  return '';
+}
+
+// Article with its ending marked; "ein" without an ending gets an empty slot
+function articleHtml(type, c, g, art) {
+  if (type === 'def') return `${art.slice(0, -1)}<span class="sig">${art.slice(-1)}</span>`;
+  if (type === 'indef') {
+    const e = POSS_END[c][g];
+    return e ? `${art.slice(0, -e.length)}<span class="sig">${e}</span>` : `${art}<span class="noend"></span>`;
+  }
+  return '';
+}
+
+// Why the adjective gets this ending
+function adjReason(type, c, g, art) {
+  const end = ADJ_END[type][c][g];
+  if (type === 'def') {
+    return `<b>${art}</b> is a der-word: it already shows the case and gender, so the adjective only needs the weak ending ${end === 'e'
+      ? '<b>-e</b>. This is one of the five -e spots (Nominativ singular, plus Akkusativ feminine and neuter).'
+      : '<b>-en</b>, used everywhere outside the five -e spots.'}`;
+  }
+  if (type === 'indef') {
+    if (!POSS_END[c][g]) return `<b>${art}</b> has no ending here, so it doesn't show the gender. The adjective has to show it: <b>-${end}</b>, borrowing the last letter of <b>${DEF_ART[c][g]}</b>.`;
+    return `<b>${art}</b> already has an ending (-${POSS_END[c][g]}), so the adjective takes the weak ending <b>-${end}</b>.`;
+  }
+  if (c === 'gen' && g !== 'f' && g !== 'pl') return 'No article, but the noun already ends in -s here, so the adjective takes <b>-en</b>. This is the one exception.';
+  return `No article, so the adjective does the article's job. It takes the ending of <b>${DEF_ART[c][g]}</b> → <b>-${end}</b>.`;
+}
+
+function adjTable(type, hi) {
+  const s = ADJ_SAMPLE[type];
+  let h = `<div class="tw"><table class="adjt"><thead><tr><th></th>${GENDER_KEYS.map(g => `<th>${GENDERS[g].name}</th>`).join('')}</tr></thead><tbody>`;
+  for (const c of CASE_KEYS) {
+    h += `<tr class="row-${c}"><th>${CASES[c].name}<span class="sub">${CASES[c].q}</span></th>`;
+    for (const g of GENDER_KEYS) {
+      const end = ADJ_END[type][c][g];
+      const art = adjArticle(type, c, g);
+      const cls = type !== 'none' && end === 'e' ? 'ae-e' : end === 'en' ? 'ae-en' : 'ae-strong';
+      const on = hi && hi.c === c && hi.g === g ? ' ae-on' : '';
+      h += `<td class="${cls}${on}"><span class="ae">-${end}</span><span class="sub">${art ? art + ' ' : ''}${adjForm(s.adj, end)} ${nounForm(s.nouns[g], c)}</span></td>`;
+    }
+    h += '</tr>';
+  }
+  return h + '</tbody></table></div>';
+}
+
+const adjLegend = `<div class="legend"><span><i class="sw ae-e"></i> -e</span><span><i class="sw ae-en"></i> -en</span><span><i class="sw ae-strong"></i> strong ending (shows the gender)</span></div>`;
+
+/* =========================================================
+   ADJECTIVES (learn)
+   ========================================================= */
+
+const adjB = { type: 'indef', stem: 'ein', c: 'nom', g: 'm', adj: 'alt', tab: 'def' };
+const BUILDER_ADJ = ['alt', 'neu', 'gut', 'klein', 'schön', 'teuer'];
+
+function renderAdjectives() {
+  const sigRow = (art, adj, end, noun, note) => `<div class="sigrow"><div class="sigphrase">${art} ${adj}<span class="sig">${end}</span> ${noun}</div><div class="muted">${note}</div></div>`;
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Adjective endings</h2>
+    <p class="lead">When an adjective stands <b>before a noun</b>, it needs an ending. The golden rule: <b>the gender + case signal has to show up once</b>, either on the article or on the adjective.</p>
+    ${sigRow(`de<span class="sig">r</span>`, 'alt', 'e', 'Hund', 'The article already shows "r" (masculine), so the adjective relaxes: <b>-e</b>.')}
+    ${sigRow('ein<span class="noend"></span>', 'alt', 'er', 'Hund', '"ein" shows nothing, so the adjective takes the "r": <b>-er</b>.')}
+    ${sigRow('', 'rot', 'er', 'Wein', 'No article at all, so the adjective shows the "r": <b>-er</b>.')}
+    <div class="tips">
+      <div class="tip"><b>After the noun: no ending</b><i>Der Hund ist alt.</i> Only adjectives <u>before</u> a noun get endings.</div>
+      <div class="tip"><b>Dativ and Genitiv after an article</b>are always <b>-en</b>, in both the der and ein tables. That's half the table done!</div>
+      <div class="tip"><b>Two adjectives, same ending</b><i>ein schön<u>er</u> alt<u>er</u> Hund · mit dem klein<u>en</u> rot<u>en</u> Auto</i></div>
+      <div class="tip"><b>Spelling changes</b>teuer → teu<u>re</u> · dunkel → dunk<u>le</u> · hoch → ho<u>he</u> · sauer → sau<u>re</u></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The three tables</h2>
+    <div class="seg" id="adjTabs">${ADJ_TYPE_KEYS.map(k => `<button data-t="${k}" class="${adjB.tab === k ? 'on' : ''}">${ADJ_TYPES[k].name}</button>`).join('')}</div>
+    <div id="adjTabBody"></div>
+  </section>
+
+  <section class="card">
+    <h2>Ending builder</h2>
+    <p class="muted">Pick an article, a case, a gender and an adjective. See the ending and why.</p>
+    <div id="builder"></div>
+  </section>`;
+
+  drawAdjTab();
+  drawBuilder();
+  $('#adjTabs').addEventListener('click', e => {
+    const b = e.target.closest('[data-t]');
+    if (!b) return;
+    adjB.tab = b.dataset.t;
+    $$('#adjTabs button').forEach(x => x.classList.toggle('on', x === b));
+    drawAdjTab();
+  });
+}
+
+function drawAdjTab() {
+  const t = adjB.tab;
+  const notes = {
+    def: 'Easy one: <b>-e</b> in the five spots (all Nominativ singular, plus Akkusativ feminine and neuter). <b>-en</b> everywhere else.',
+    indef: 'Same as the der-table, except in the three spots where ein / mein has <b>no ending</b> (Nom masc., Nom + Akk neuter). There the adjective shows the gender itself: <b>-er</b> / <b>-es</b>. Plural uses kein / mein (ein has no plural).',
+    none: 'The adjective takes the ending der / die / das would have: der → -er, den → -en, dem → -em, die → -e, das → -es. Exception: Genitiv masculine/neuter is <b>-en</b>, because the noun already gets -s.',
+  };
+  $('#adjTabBody').innerHTML = `<p style="margin-top:14px">${notes[t]} <small>(${ADJ_TYPES[t].also})</small></p>${adjLegend}${adjTable(t)}`;
+}
+
+function drawBuilder() {
+  const B = adjB;
+  if (B.type === 'indef' && B.g === 'pl' && B.stem === 'ein') B.stem = 'kein';
+  const s = ADJ_SAMPLE[B.type];
+  const noun = s.nouns[B.g];
+  const art = adjArticle(B.type, B.c, B.g, B.stem);
+  const end = ADJ_END[B.type][B.c][B.g];
+  const word = adjForm(B.adj, end);
+  const stem = word.slice(0, word.length - end.length);
+  const phrase = `${art ? articleHtml(B.type, B.c, B.g, art) + ' ' : ''}${stem}<span class="end">${end}</span> ${nounForm(noun, B.c)}`;
+
+  const chips = (key, list, label) => `<div class="chips">${list.map(([v, l]) => `<button class="chipbtn ${B[key] === v ? 'on' : ''}" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  const typeChips = [['def', 'der / die / das'], ['indef', 'ein-word'], ['none', 'no article']];
+  const stems = ADJ_ARTICLE_STEMS.filter(x => !(B.g === 'pl' && x === 'ein')).map(x => [x, x + '…']);
+
+  $('#builder').innerHTML = `
+    <div class="bgrid">
+      <div><h4>Article</h4>${chips('type', typeChips)}${B.type === 'indef' ? chips('stem', stems) : ''}</div>
+      <div><h4>Case</h4>${chips('c', CASE_KEYS.map(c => [c, CASES[c].name]))}</div>
+      <div><h4>Noun</h4>${chips('g', GENDER_KEYS.map(g => [g, `${GENDERS[g].art} ${s.nouns[g].n}`]))}</div>
+      <div><h4>Adjective</h4>${chips('adj', BUILDER_ADJ.map(a => [a, a]))}</div>
+    </div>
+    <div class="build-out c-${B.c}">${phrase}</div>
+    <p>${adjReason(B.type, B.c, B.g, art)}</p>
+    ${adjLegend}${adjTable(B.type, { c: B.c, g: B.g })}`;
+
+  $$('#builder [data-k]').forEach(b => b.addEventListener('click', () => {
+    B[b.dataset.k] = b.dataset.v;
+    drawBuilder();
+  }));
+}
+
+/* =========================================================
+   TABLES
+   ========================================================= */
+
+const tables = { by: 'owner', owner: 'er', c: 'akk' };
+
+function renderTables() {
+  const artCell = (c, g) => {
+    const def = DEF_ART[c][g];
+    const ein = g === 'pl' ? '–' : possForm('ein', c, g);
+    return `${def}<span class="sub">${ein} · ${possForm('kein', c, g)}</span>`;
+  };
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Tables</h2>
+    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a></div>
+  </section>
+
+  <section class="card" id="t-art">
+    <h2>Articles by case</h2>
+    <p class="muted">Top: definite (the). Below: ein (a) · kein (no). Possessives (mein, dein …) take exactly the same endings as ein / kein.</p>
+    <div class="tw"><table>
+      <thead><tr><th></th>${GENDER_KEYS.map(g => `<th>${GENDERS[g].name}</th>`).join('')}</tr></thead>
+      <tbody>${CASE_KEYS.map(c => `<tr class="row-${c}"><th>${CASES[c].name}<span class="sub">${CASES[c].q}</span></th>${GENDER_KEYS.map(g => `<td class="f">${artCell(c, g)}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="t-pron">
+    <h2>Personal pronouns</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Person</th>${CASE_KEYS.map(c => `<th class="col-${c}">${CASES[c].name}<span class="sub">${CASES[c].q}</span></th>`).join('')}</tr></thead>
+      <tbody>${PRONOUN_KEYS.map(k => `<tr><th>${PRONOUNS[k].label}<span class="sub">${PRONOUNS[k].en}</span></th>${CASE_KEYS.map(c => `<td class="f c-${c}">${PRONOUNS[k][c]}${c === 'gen' ? '<span class="sub">rare</span>' : ''}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    <p class="muted" style="margin-top:8px">Notice: <b>uns, euch</b> are the same in Akk and Dat. <b>sie / sie / Sie</b> look the same in Nom and Akk. <b>ihr</b> can mean "you all" (Nom) or "to her" (Dat).</p>
+  </section>
+
+  <section class="card" id="t-stems">
+    <h2>Possessive words: who owns it?</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Owner</th><th>Possessive</th><th>English</th><th>Example</th></tr></thead>
+      <tbody>${PRONOUN_KEYS.map(k => `<tr><th>${PRONOUNS[k].label}</th><td class="f">${PRONOUNS[k].poss}-</td><td>${PRONOUNS[k].possEn}</td><td>${possForm(PRONOUNS[k].poss, 'nom', 'm')} Hund · ${possForm(PRONOUNS[k].poss, 'nom', 'f')} Katze</td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="muted" style="margin-top:8px">The <b>owner</b> picks the word (sein vs ihr). The <b>thing owned</b> and the <b>case</b> pick the ending. <i>Tom → sein-, his cat (die Katze) → seine Katze.</i></p>
+  </section>
+
+  <section class="card" id="t-poss">
+    <h2>Possessive endings</h2>
+    <div class="ctl-row"><span>View by</span>
+      <div class="seg" id="tby"><button data-by="owner" class="${tables.by === 'owner' ? 'on' : ''}">one owner, all cases</button><button data-by="case" class="${tables.by === 'case' ? 'on' : ''}">one case, all owners</button></div>
+    </div>
+    <div id="tpossBody"></div>
+  </section>
+
+  <section class="card" id="t-prep">
+    <h2>Prepositions and verbs that decide the case</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Case</th><th>Words</th></tr></thead>
+      <tbody>
+        <tr class="row-akk"><th>Akkusativ</th><td>${PREPS.akk.join(', ')}</td></tr>
+        <tr class="row-dat"><th>Dativ</th><td>${PREPS.dat.join(', ')}</td></tr>
+        <tr><th>Wo? → Dat<br>Wohin? → Akk</th><td>${PREPS.two.join(', ')}</td></tr>
+        <tr class="row-gen"><th>Genitiv</th><td>${PREPS.gen.join(', ')}</td></tr>
+        <tr class="row-dat"><th>Dativ verbs</th><td>${DAT_VERBS.join(', ')}</td></tr>
+        <tr><th>Dat person +<br>Akk thing</th><td>${DAT_AKK_VERBS.join(', ')}</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="t-adj">
+    <h2>Adjective endings</h2>
+    ${adjLegend}
+    ${ADJ_TYPE_KEYS.map(t => `<h4>${ADJ_TYPES[t].name} <small>(${ADJ_TYPES[t].also})</small></h4>${adjTable(t)}`).join('')}
+  </section>`;
+
+  drawPossBody();
+  $('#tby').addEventListener('click', e => {
+    const b = e.target.closest('button[data-by]');
+    if (!b) return;
+    tables.by = b.dataset.by;
+    $$('#tby button').forEach(x => x.classList.toggle('on', x === b));
+    drawPossBody();
+  });
+  $$('[data-jump]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    $(a.getAttribute('href')).scrollIntoView({ behavior: 'smooth' });
+  }));
+}
+
+function drawPossBody() {
+  const body = $('#tpossBody');
+  if (tables.by === 'owner') {
+    body.innerHTML = `<div class="chips" id="townChips">${PRONOUN_KEYS.map(k => `<button class="chipbtn ${k === tables.owner ? 'on' : ''}" data-k="${k}">${PRONOUNS[k].label} → ${PRONOUNS[k].poss}</button>`).join('')}</div>
+      ${possTable(PRONOUNS[tables.owner].poss, null, true)}`;
+    $('#townChips').addEventListener('click', e => {
+      const b = e.target.closest('[data-k]');
+      if (b) { tables.owner = b.dataset.k; drawPossBody(); }
+    });
+  } else {
+    const c = tables.c;
+    body.innerHTML = `<div class="chips" id="tcaseChips">${CASE_KEYS.map(k => `<button class="chipbtn ${k === c ? 'on' : ''}" data-c="${k}">${CASES[k].name}</button>`).join('')}</div>
+      <div class="tw"><table><thead><tr><th>Owner</th>${GENDER_KEYS.map(g => `<th>${GENDERS[g].name}</th>`).join('')}</tr></thead><tbody>
+      ${PRONOUN_KEYS.map(k => `<tr><th>${PRONOUNS[k].label}</th>${GENDER_KEYS.map(g => `<td class="f c-${c}">${possForm(PRONOUNS[k].poss, c, g)}</td>`).join('')}</tr>`).join('')}
+      </tbody></table></div>`;
+    $('#tcaseChips').addEventListener('click', e => {
+      const b = e.target.closest('[data-c]');
+      if (b) { tables.c = b.dataset.c; drawPossBody(); }
+    });
+  }
+}
+
+/* =========================================================
+   PRACTICE
+   ========================================================= */
+
+const MODES = {
+  who: { title: '👀 Who is who', d: 'Which pronoun is each person, from your view?' },
+  anrede: { title: '🗣️ du · ihr · Sie', d: 'How do you address them?' },
+  detective: { title: '🔍 Case detective', d: 'Ask the question, find the case.' },
+  pron: { title: '👤 Pronouns', d: 'ich / mich / mir … in sentences.' },
+  poss: { title: '🎁 Whose is it?', d: 'mein / sein / ihr … with the right ending.' },
+  adj: { title: '✨ Adjective endings', d: 'der alte · ein alter · alter …' },
+  mix: { title: '🔀 Mix', d: 'All of the above.' },
+};
+
+const session = { c: 0, t: 0, streak: 0 };
+let cur = null;
+
+function sceneHtml(L, highlight, pool) {
+  const chips = pool.filter(p => p !== 'me').map(p =>
+    `<span class="chip ${p === highlight ? 'hl' : ''} ${p === L ? 'listener' : ''}">${personLabel(p)}${p === L ? ' 💬' : ''}</span>`).join('');
+  return `<div class="scene"><div class="scene-top">🙋 <b>You</b> are talking to <b>${personLabel(L)}</b> <span class="muted">(${LISTENERS[L].desc})</span></div><div class="cast">${chips}</div></div>`;
+}
+
+const typeMode = () => settings.answer === 'type';
+
+// Text answers: case-insensitive, except formal Sie / Ihnen / Ihr… where capitals change the meaning.
+function checkText(given, expected, atStart) {
+  const g = given.trim().replace(/\s+/g, ' ');
+  if (g === expected) return { ok: true };
+  if (g.toLowerCase() !== expected.toLowerCase()) return { ok: false };
+  if (atStart || !/^(sie|ihnen|ihr|ihre|ihren|ihrem|ihrer|ihres)$/.test(expected.toLowerCase())) return { ok: true };
+  return { ok: false, note: expected[0] === expected[0].toUpperCase()
+    ? 'Formal Sie / Ihnen / Ihr is always written with a capital letter.'
+    : 'With a capital letter this would be the formal "you". Here it must be lowercase.' };
+}
+
+const GEN = {
+  who() {
+    const L = rnd(Object.keys(LISTENERS));
+    const pool = poolFor(L);
+    const pid = rnd(pool.filter(p => p !== 'me'));
+    const key = pronKey(pid, L);
+    const P = PRONOUNS[key];
+    const item = PEOPLE[pid].item;
+    const verb = item.g === 'pl' ? 'sind' : 'ist';
+    const possAns = possForm(P.poss, 'nom', item.g);
+    const possOpts = uniq(PRONOUN_KEYS.map(k => possForm(PRONOUNS[k].poss, 'nom', item.g)));
+    return {
+      caseKey: 'nom',
+      scene: sceneHtml(L, pid, pool),
+      steps: [
+        { ask: `Which pronoun do you use for <b>${personLabel(pid)}</b>?`, options: PRONOUN_KEYS.map(k => ({ v: k, l: PRONOUN_BTN[k] })), answer: key },
+        { ask: `This belongs to ${PEOPLE[pid].name}: ${item.e} <b>${nounLabel(item)}</b>. Say: “Das ${verb} ___ ${item.n}.”`,
+          options: typeMode() ? null : shuffle(possOpts).map(v => ({ v, l: v })), answer: possAns },
+      ],
+      explain: `<ol>
+        <li>${personLabel(pid)}: ${relation(pid, L)} → <b>${P.label}</b> <small>(${P.en})</small></li>
+        <li>${P.label} → possessive <b>${P.poss}-</b> · ${nounLabel(item)} is ${GENDERS[item.g].name}, Nominativ → <b>${possAns}</b></li>
+      </ol><div class="full">Das ${verb} ${hl('nom', possAns)} ${item.n}.</div>`,
+    };
+  },
+
+  anrede() {
+    const it = rnd(ANREDE);
+    const rules = { du: 'One person you know well → du.', ihr: 'Two or more people you’d each say du to → ihr.', Sie: 'Formal situation (one or more people) → Sie.' };
+    return {
+      steps: [{ ask: `You speak to: <span style="font-size:1.3rem">${it.s}</span>`, options: ['du', 'ihr', 'Sie'].map(v => ({ v, l: v })), answer: it.a }],
+      explain: `<b>${it.a}</b>: ${rules[it.a]} ${it.note ? `<br><small>${it.note}</small>` : ''}`,
+    };
+  },
+
+  detective() {
+    const it = rnd(DETECTIVE);
+    const target = it.s.match(/\[(.+?)\]/)[1];
+    const qFilled = it.q.replace('{Q}', it.a);
+    const sentence = c => it.s.replace(/\[(.+?)\]/, `<mark class="tgt ${c || ''}">$1</mark>`);
+    const wasNote = it.a === 'Was' ? '<br><small>Tip: “Was?” works for Nom and Akk. Is it the one doing it (Nom) or the one being hit by the action (Akk)?</small>' : '';
+    return {
+      caseKey: it.c,
+      sentence: sentence(),
+      sentenceDone: sentence(it.c),
+      steps: [
+        { ask: 'Ask a question about the highlighted part. Which question word fits?',
+          pre: `<div class="qline">${it.q.replace('{Q}', '<span class="blank">___</span>')}</div>`,
+          options: DETECTIVE_OPTS[it.t].map(v => ({ v, l: v })), answer: it.a,
+          after: `<i>${qFilled}</i> → <b>${target}</b>` },
+        { ask: 'So which case is it?', options: CASE_KEYS.map(c => ({ v: c, l: CASES[c].name })), answer: it.c },
+      ],
+      explain: `<i>${qFilled}</i> → <b>${target}</b> → ${tag(it.c)}<br>${it.why}${wasNote}`,
+    };
+  },
+
+  pron() {
+    const L = rnd(Object.keys(LISTENERS));
+    const pool = poolFor(L);
+    const t = rnd(PRON_TEMPLATES);
+    const pid = rnd(t.self ? pool.filter(p => p !== 'me' && p !== 'us') : pool);
+    const key = pronKey(pid, L);
+    const P = PRONOUNS[key];
+    const atStart = t.s.startsWith('{X}');
+    const answer = atStart ? cap(P[t.c]) : P[t.c];
+    const fill = x => t.s.replace('{sein}', CONJ.sein[key]).replace('{haben}', CONJ.haben[key]).replace('{kommen}', CONJ.kommen[key]).replace('{X}', x);
+
+    let options = null;
+    if (!typeMode()) {
+      const same = uniq(['nom', 'akk', 'dat'].map(c => P[c]));
+      const others = shuffle(PRONOUN_KEYS.filter(k => k !== key)).map(k => PRONOUNS[k][t.c]);
+      const forms = uniq([P[t.c], ...same, ...others].map(f => atStart ? cap(f) : f)).slice(0, 6);
+      options = shuffle(forms).map(v => ({ v, l: v }));
+    }
+    return {
+      caseKey: t.c,
+      scene: sceneHtml(L, pid, pool),
+      sentence: fill(`<span class="blank">___</span> <span class="who">${personLabel(pid)}</span>`),
+      steps: [{ ask: 'Fill in the pronoun.', options, answer, atStart }],
+      explain: `<ol>
+        <li><b>Who?</b> ${personLabel(pid)}: ${relation(pid, L)} → <b>${P.label}</b></li>
+        <li><b>Ask:</b> <i>${t.q}</i> → ${tag(t.c)} ${t.why}</li>
+        <li><b>${P.label}</b> in ${CASES[t.c].name} → ${hl(t.c, P[t.c])}</li>
+      </ol><div class="full">${fill(hl(t.c, answer))}</div>`,
+    };
+  },
+
+  poss() {
+    const L = rnd(Object.keys(LISTENERS));
+    const pool = poolFor(L);
+    const owner = rnd(pool);
+    const key = pronKey(owner, L);
+    const P = PRONOUNS[key];
+    const t = rnd(POSS_TEMPLATES.filter(x => settings.gen || x.c !== 'gen'));
+    const noun = rnd(NOUNS.filter(n => t.anim === undefined || !!n.anim === t.anim));
+    const pl = noun.g === 'pl';
+    const pick = v => Array.isArray(v) ? v[pl ? 1 : 0] : v;
+    const s = pick(t.s).replace('{ist}', pl ? 'sind' : 'ist');
+    const q = pick(t.q).replace('{ist}', pl ? 'sind' : 'ist');
+    const atStart = s.startsWith('{P}');
+    const form = possForm(P.poss, t.c, noun.g);
+    const answer = atStart ? cap(form) : form;
+    const end = POSS_END[t.c][noun.g];
+    const fill = x => s.replace('{P}', x).replace('{N}', nounForm(noun, t.c));
+
+    let options = null;
+    if (!typeMode()) {
+      const sameStem = shuffle(uniq(GENDER_KEYS.flatMap(g => CASE_KEYS.map(c => possForm(P.poss, c, g)))).filter(f => f !== form)).slice(0, 2);
+      const otherStems = shuffle(uniq(PRONOUN_KEYS.map(k => possForm(PRONOUNS[k].poss, t.c, noun.g))).filter(f => f !== form)).slice(0, 3);
+      options = shuffle(uniq([form, ...sameStem, ...otherStems].map(f => atStart ? cap(f) : f))).map(v => ({ v, l: v }));
+    }
+    const thing = settings.gender ? nounLabel(noun) : noun.n;
+    return {
+      caseKey: t.c,
+      scene: sceneHtml(L, owner === 'me' ? null : owner, pool),
+      hint: `${noun.e} <b>${thing}</b> belongs to <b>${personLabel(owner)}</b>`,
+      sentence: fill('<span class="blank">___</span>'),
+      steps: [{ ask: 'Fill in the possessive word.', options, answer, atStart }],
+      explain: `<ol>
+        <li><b>Owner:</b> ${personLabel(owner)}: ${relation(owner, L)} → ${P.label} → <b>${P.poss}-</b></li>
+        <li><b>Thing:</b> ${nounLabel(noun)} → ${GENDERS[noun.g].name}</li>
+        <li><b>Ask:</b> <i>${q}</i> → ${tag(t.c)} ${t.why}</li>
+        <li><b>Ending:</b> ${GENDERS[noun.g].name} + ${CASES[t.c].name} → ${end ? `<span class="end">-${end}</span>` : 'no ending'} → ${hl(t.c, form)}</li>
+      </ol><div class="full">${fill(hl(t.c, answer))}</div>`,
+    };
+  },
+
+  adj() {
+    const type = rnd(['def', 'def', 'indef', 'indef', 'indef', 'none']);
+    let t, noun, adj, art = '';
+    if (type === 'none') {
+      t = rnd(ADJ_NONE_TEMPLATES);
+      noun = rnd(MASS_NOUNS);
+      adj = rnd(noun.adj);
+    } else {
+      t = rnd(ADJ_TEMPLATES.filter(x => settings.gen || x.c !== 'gen'));
+      noun = rnd(NOUNS.filter(n => t.anim === undefined || !!n.anim === t.anim));
+      adj = rnd(noun.anim ? ADJ_PEOPLE.concat(noun.size ? ADJ_SIZE : []) : ADJ_THINGS);
+    }
+    const c = t.c;
+    const pl = noun.g === 'pl';
+    const pick = v => Array.isArray(v) ? v[pl ? 1 : 0] : v;
+    const s = pick(t.s).replace('{ist}', pl ? 'sind' : 'ist').replace('{schmeckt}', pl ? 'schmecken' : 'schmeckt');
+    const q = pick(t.q).replace('{ist}', pl ? 'sind' : 'ist');
+    // ein has no plural; "kein" sounds odd in Genitiv sentences
+    if (type !== 'none') art = adjArticle(type, c, noun.g, rnd(ADJ_ARTICLE_STEMS.filter(x => !(pl && x === 'ein') && !(c === 'gen' && x === 'kein'))));
+
+    const end = ADJ_END[type][c][noun.g];
+    const word = adjForm(adj, end);
+    const adjFirst = s.startsWith('{ADJ}');
+    const answer = adjFirst ? cap(word) : word;
+    const fill = x => s
+      .replace('{A}', s.startsWith('{A}') ? cap(art) : art)
+      .replace('{ADJ}', x)
+      .replace('{N}', nounForm(noun, c));
+
+    const options = typeMode() ? null
+      : uniq(['e', 'en', 'er', 'es', 'em'].map(e => adjForm(adj, e))).map(f => adjFirst ? cap(f) : f).map(v => ({ v, l: v }));
+    // Typed: accept the full word or just the ending ("en" / "-en")
+    const check = value => {
+      const g = value.trim().replace(/^-/, '').toLowerCase();
+      if (g === word.toLowerCase() || g === end) return { ok: true };
+      if (ADJ_STEM[adj] && g === adj + end) return { ok: false, note: `${adj} drops a letter before an ending: ${adjForm(adj, end)}.` };
+      return { ok: false };
+    };
+    const thing = settings.gender ? nounLabel(noun) : noun.n;
+    return {
+      caseKey: c,
+      hint: `${noun.e} <b>${thing}</b> · adjective: <b>${adj}</b>`,
+      sentence: fill(`<span class="blank">${adjFirst ? cap(adj) : adj}…</span>`),
+      steps: [{ ask: 'Pick the adjective with the right ending.', options, answer, check }],
+      explain: `<ol>
+        <li><b>Article:</b> ${art ? `<b>${art}</b> → ${ADJ_TYPES[type].short}` : 'none'}</li>
+        <li><b>Noun:</b> ${nounLabel(noun)} → ${GENDERS[noun.g].name}</li>
+        <li><b>Ask:</b> <i>${q}</i> → ${tag(c)} ${t.why || ''}</li>
+        <li><b>Ending:</b> ${adjReason(type, c, noun.g, art)} → ${hl(c, word)}</li>
+      </ol><div class="full">${fill(hl(c, answer))}</div>`,
+    };
+  },
+};
+
+function renderPractice() {
+  app.innerHTML = `
+  <section class="card">
+    <h2>Practice</h2>
+    <div class="modes" id="modes">${Object.keys(MODES).map(k => `<button class="mode ${settings.mode === k ? 'on' : ''}" data-m="${k}"><div class="t">${MODES[k].title}</div><div class="d">${MODES[k].d}</div></button>`).join('')}</div>
+    <div class="settings">
+      <div class="seg" id="ansSeg"><button data-a="choice" class="${!typeMode() ? 'on' : ''}">Multiple choice</button><button data-a="type" class="${typeMode() ? 'on' : ''}">Type it</button></div>
+      <label><input type="checkbox" id="optGen" ${settings.gen ? 'checked' : ''}> Include Genitiv</label>
+      <label><input type="checkbox" id="optGender" ${settings.gender ? 'checked' : ''}> Show der/die/das hint</label>
+    </div>
+  </section>
+  <section class="card" id="ex"></section>
+  <section class="card" id="stats"></section>`;
+
+  $('#modes').addEventListener('click', e => {
+    const b = e.target.closest('[data-m]');
+    if (!b) return;
+    settings.mode = b.dataset.m; saveSettings();
+    $$('.mode').forEach(x => x.classList.toggle('on', x === b));
+    newExercise();
+  });
+  $('#ansSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-a]');
+    if (!b) return;
+    settings.answer = b.dataset.a; saveSettings();
+    $$('#ansSeg button').forEach(x => x.classList.toggle('on', x === b));
+    newExercise();
+  });
+  $('#optGen').addEventListener('change', e => { settings.gen = e.target.checked; saveSettings(); });
+  $('#optGender').addEventListener('change', e => { settings.gender = e.target.checked; saveSettings(); newExercise(); });
+
+  newExercise();
+  drawStats();
+}
+
+function newExercise() {
+  const mode = settings.mode === 'mix'
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj'])
+    : settings.mode;
+  cur = { mode, ex: GEN[mode](), step: 0, results: [] };
+  drawEx();
+}
+
+function optionLabel(st, v) {
+  const o = st.options && st.options.find(x => x.v === v);
+  return o ? o.l : v;
+}
+
+function drawEx() {
+  const box = $('#ex');
+  if (!box) return;
+  const { ex } = cur;
+  const finished = cur.results.length === ex.steps.length;
+  let h = `<div class="ex-head"><span class="mode-tag">${MODES[cur.mode].title}</span><span class="score">Session <b>${session.c}/${session.t}</b> · Streak <b>${session.streak}</b>${session.streak >= 3 ? ' 🔥' : ''}</span></div>`;
+  if (ex.scene) h += ex.scene;
+  if (ex.hint) h += `<div class="hint">${ex.hint}</div>`;
+  if (ex.sentence) h += `<div class="sentence">${finished && ex.sentenceDone ? ex.sentenceDone : ex.sentence}</div>`;
+
+  ex.steps.forEach((st, i) => {
+    if (i > cur.step) return;
+    const res = cur.results[i];
+    h += `<div class="step" data-step="${i}"><div class="ask">${st.ask}</div>${st.pre || ''}`;
+    if (st.options) {
+      h += `<div class="opts">${st.options.map((o, n) => {
+        let cls = '';
+        if (res) cls = o.v === st.answer ? 'right' : (o.v === res.value ? 'wrong' : '');
+        return `<button class="opt ${cls}" data-v="${o.v}" ${res ? 'disabled' : ''}>${!res && st.options.length <= 9 ? `<span class="k">${n + 1}</span>` : ''}${o.l}</button>`;
+      }).join('')}</div>`;
+    } else {
+      const cls = res ? (res.ok ? 'right' : 'wrong') : '';
+      h += `<div class="typerow"><input type="text" autocomplete="off" autocapitalize="off" spellcheck="false" class="${cls}" value="${res ? res.value.replace(/"/g, '&quot;') : ''}" ${res ? 'disabled' : ''} placeholder="type the word…"><button class="primary check" ${res ? 'disabled' : ''}>Check</button></div>`;
+    }
+    if (res) {
+      h += `<div class="fb ${res.ok ? 'ok' : 'bad'}">${res.ok ? '✓ Richtig!' : `✗ Correct answer: <b>${optionLabel(st, st.answer)}</b>`}${res.note ? `<span class="more">${res.note}</span>` : ''}${st.after ? `<span class="more">${st.after}</span>` : ''}</div>`;
+    }
+    h += '</div>';
+  });
+
+  if (finished) {
+    h += `<div class="explain">${ex.explain}</div><div class="next-row"><button class="primary" id="next">Next →</button><span class="kbd">or press Enter</span></div>`;
+  }
+  box.innerHTML = h;
+
+  $$('.step', box).forEach(stepEl => {
+    const i = +stepEl.dataset.step;
+    $$('.opt', stepEl).forEach(b => b.addEventListener('click', () => answer(i, b.dataset.v)));
+    const input = $('input', stepEl);
+    if (input && !input.disabled) {
+      const go = () => { if (input.value.trim()) answer(i, input.value); };
+      $('.check', stepEl).addEventListener('click', go);
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(); } });
+      input.focus();
+    }
+  });
+  const next = $('#next');
+  if (next) { next.addEventListener('click', newExercise); next.focus({ preventScroll: true }); }
+}
+
+function answer(i, value) {
+  if (cur.results[i]) return;
+  const st = cur.ex.steps[i];
+  const r = st.options ? { ok: value === st.answer } : st.check ? st.check(value) : checkText(value, st.answer, st.atStart);
+  cur.results[i] = { ok: r.ok, value, note: r.note };
+  if (i < cur.ex.steps.length - 1) cur.step = i + 1;
+  else record();
+  drawEx();
+}
+
+function record() {
+  const ok = cur.results.every(r => r.ok);
+  session.t++;
+  if (ok) { session.c++; session.streak++; } else session.streak = 0;
+  const stats = store.get('stats', { modes: {}, cases: {} });
+  const m = stats.modes[cur.mode] || (stats.modes[cur.mode] = { c: 0, t: 0 });
+  m.t++; if (ok) m.c++;
+  if (cur.ex.caseKey) {
+    const c = stats.cases[cur.ex.caseKey] || (stats.cases[cur.ex.caseKey] = { c: 0, t: 0 });
+    c.t++; if (ok) c.c++;
+  }
+  store.set('stats', stats);
+  drawStats();
+}
+
+function drawStats() {
+  const el = $('#stats');
+  if (!el) return;
+  const stats = store.get('stats', { modes: {}, cases: {} });
+  const bar = (label, s, cls) => {
+    const pct = s && s.t ? Math.round(100 * s.c / s.t) : 0;
+    return `<div class="stat"><div class="row"><span>${label}</span><span>${s && s.t ? `${s.c}/${s.t} · ${pct}%` : '–'}</span></div><div class="bar ${cls || ''}"><i style="width:${pct}%"></i></div></div>`;
+  };
+  el.innerHTML = `<div class="ex-head"><h3 style="margin:0">Your progress (all time)</h3><button class="ghost" id="resetStats">Reset</button></div>
+    <div class="statgrid">
+      <div>${Object.keys(MODES).filter(k => k !== 'mix').map(k => bar(MODES[k].title, stats.modes[k])).join('')}</div>
+      <div>${CASE_KEYS.map(c => bar(CASES[c].name, stats.cases[c], c)).join('')}</div>
+    </div>`;
+  $('#resetStats').addEventListener('click', () => {
+    if (confirm('Reset all progress?')) { store.set('stats', { modes: {}, cases: {} }); drawStats(); }
+  });
+}
+
+// Keyboard: 1–9 picks an option, Enter goes to the next exercise
+document.addEventListener('keydown', e => {
+  if (!cur || !$('#ex') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.tagName === 'INPUT') return;
+  const finished = cur.results.length === cur.ex.steps.length;
+  if (e.key === 'Enter' && finished) {
+    e.preventDefault();
+    newExercise();
+    return;
+  }
+  const n = parseInt(e.key, 10);
+  if (!finished && n >= 1) {
+    const st = cur.ex.steps[cur.step];
+    if (st.options && st.options[n - 1]) answer(cur.step, st.options[n - 1].v);
+  }
+});
+
+route();
+})();
