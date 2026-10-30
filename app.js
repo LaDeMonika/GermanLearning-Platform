@@ -84,7 +84,7 @@ function possTable(stem, hiGender, withNouns) {
 
 /* ---------- Routing ---------- */
 
-const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, genders: renderGenders, perfekt: renderPerfekt, praeteritum: renderPraeteritum, wortstellung: renderWordOrder, tables: renderTables, practice: renderPractice };
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, relative: renderRelative, wowohin: renderWoWohin, genders: renderGenders, plurals: renderPlurals, perfekt: renderPerfekt, praeteritum: renderPraeteritum, konjunktiv: renderKonjunktiv, verbprep: renderVerbPrep, wortstellung: renderWordOrder, tables: renderTables, practice: renderPractice };
 function route() {
   const r = location.hash.slice(1).split('/')[0] || 'cases';
   const key = ROUTES[r] ? r : 'cases';
@@ -819,6 +819,238 @@ function renderGenders() {
 }
 
 /* =========================================================
+   RELATIVE CLAUSES
+   ========================================================= */
+
+const relNounCase = (x, c) => `${DEF_ART[c][x.g]} ${(c === 'dat' && x.dat) || (c === 'gen' && x.gen) || x.n}`;
+const relPick = (v, x) => (Array.isArray(v) ? v[x.g === 'pl' ? 1 : 0] : v);
+
+// One relative-clause sentence: the pronoun, a sentence maker and the "put the noun back in" check sentence
+function relBuild(x, cl, main) {
+  const pron = REL_PRON[cl.c][x.g];
+  const mainTxt = relPick(main.s, x).replace('{X}', relNounCase(x, main.c));
+  const qStr = relPick(cl.q, x);
+  const X = relNounCase(x, cl.c);
+  return {
+    pron,
+    sentence: r => `${mainTxt} ${relPick(cl.s, x).replace('{R}', r)}.`,
+    q: qStr.replace('{X}', hl(cl.c, qStr.startsWith('{X}') ? cap(X) : X)),
+  };
+}
+
+function relExplain(x, cl, main, b) {
+  const special = ['denen', 'dessen', 'deren'].includes(b.pron);
+  return `<ol>
+    <li><b>Gender / number</b> comes from the noun: ${GART[x.g]} ${x.n} → ${GENDERS[x.g].name}</li>
+    <li><b>Case</b> comes from the relative clause. Put the noun back in: <i>${b.q}</i> → ${tag(cl.c)}${cl.prep ? ` <small>(${cl.prep} + ${CASES[cl.c].name})</small>` : ''}</li>
+    <li>${GENDERS[x.g].name} + ${CASES[cl.c].name} → <b>${b.pron}</b>${special ? ' <small>(one of the special forms: denen, dessen, deren)</small>' : ''}</li>
+    ${main.c !== cl.c ? `<li><small>The main clause says <i>${relNounCase(x, main.c)}</i> (${CASES[main.c].name}), but that doesn't matter: only the relative clause decides the case.</small></li>` : ''}
+  </ol>`;
+}
+
+function relTable() {
+  return `<div class="tw"><table><thead><tr><th></th>${GENDER_KEYS.map(g => `<th>${GENDERS[g].name}</th>`).join('')}</tr></thead><tbody>
+    ${CASE_KEYS.map(c => `<tr class="row-${c}"><th>${CASES[c].name}<span class="sub">${CASES[c].q}</span></th>${GENDER_KEYS.map(g => {
+      const r = REL_PRON[c][g];
+      const differs = r !== DEF_ART[c][g];
+      return `<td class="f ${differs ? 'hlcol' : ''}">${r}${differs ? `<span class="sub">article: ${DEF_ART[c][g]}</span>` : ''}</td>`;
+    }).join('')}</tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+const relState = { noun: 'Mann', clause: 0, main: 0 };
+
+function renderRelative() {
+  const find = n => REL_NOUNS.find(x => x.n === n);
+  const worked = [['Mann', 0, 0], ['Laptop', 4, 0], ['Stadt', 11, 0], ['Kinder', 8, 1], ['Lehrer', 14, 0]].map(([n, ci, mi]) => {
+    const x = find(n);
+    const b = relBuild(x, REL_CLAUSES[ci], REL_MAINS[mi]);
+    return `<div class="relex"><div class="sentence">${b.sentence(hl(REL_CLAUSES[ci].c, b.pron))}</div>${relExplain(x, REL_CLAUSES[ci], REL_MAINS[mi], b)}</div>`;
+  }).join('');
+  const blocks = list => woBlocks({ prefix: list[0], punct: '.', form: 'rel', cl: {}, chunks: list.slice(1).map(([t, r]) => ({ t, r })) });
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Relative clauses: describing a noun</h2>
+    <p class="lead">A relative clause adds information about a noun: <i>der Mann, <b>der</b> dort wohnt</i> = the man <b>who</b> lives there. The relative pronoun looks like der / die / das, and it gets its information from <b>two directions</b>:</p>
+    <div class="relviz">
+      <div><span class="kb">der Mann</span><small>the noun</small></div>
+      <div class="relarrow">← gender &amp; number</div>
+      <div><span class="kb kb-V">der</span><small>relative pronoun</small></div>
+      <div class="relarrow">case →</div>
+      <div><span class="kb">dort wohnt</span><small>its own clause</small></div>
+    </div>
+    <h4>Three steps</h4>
+    <ol class="steps">
+      <li><b>Find the noun</b> it describes → masculine, feminine, neuter or plural.</li>
+      <li><b>Put the noun back into the relative clause</b> as a normal sentence. Its case there is the pronoun's case. <i>(der Mann, den ich kenne ← Ich kenne <u>den Mann</u> → Akkusativ)</i></li>
+      <li><b>Pick the form</b> from the table below.</li>
+    </ol>
+    <h4>Worked examples</h4>
+    ${worked}
+  </section>
+
+  <section class="card">
+    <h2>The relative pronouns</h2>
+    <p class="muted">Almost the same as der / die / das. Highlighted: the four forms that are different.</p>
+    ${relTable()}
+  </section>
+
+  <section class="card">
+    <h2>Word order and commas</h2>
+    <p class="muted">A relative clause is a Nebensatz: the verb goes to the <b>end</b>, and there are commas around it.</p>
+    ${blocks(['Das ist der Mann,', ['der', 'S'], ['dort', 'X'], ['wohnt', 'VE']])}
+    ${blocks(['Ich kenne die Frau,', ['mit', 'X'], ['der', 'X'], ['du', 'X'], ['gesprochen', 'E'], ['hast', 'VE']])}
+    <div class="tips">
+      <div class="tip"><b>Preposition first</b>The preposition comes before the pronoun: <i>die Stadt, <u>in der</u> ich wohne · der Freund, <u>mit dem</u> ich spiele · die Leute, <u>für die</u> ich koche</i>.</div>
+      <div class="tip"><b>In the middle of a sentence</b><i>Der Mann<u>, der dort wohnt,</u> ist mein Vater.</i> The relative clause sits right after its noun, with a comma on both sides.</div>
+      <div class="tip"><b>Genitiv: whose</b><i>der Mann, <u>dessen</u> Auto rot ist · die Frau, <u>deren</u> Kinder hier spielen</i>. dessen / deren never change.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Relative clause builder</h2>
+    <p class="muted">Pick a noun, a main clause and a relative clause.</p>
+    <div id="relTool"></div>
+  </section>
+
+  <section class="card">
+    <h2>was and wo</h2>
+    <div class="tips">
+      <div class="tip"><b>was after alles, nichts, etwas, das</b><i>Alles, <u>was</u> ich weiß · Das ist nichts, <u>was</u> mich stört · Das, <u>was</u> du sagst, stimmt.</i></div>
+      <div class="tip"><b>was after a superlative</b><i>Das ist das Beste, <u>was</u> ich je gegessen habe.</i></div>
+      <div class="tip"><b>wo for places</b><i>die Stadt, <u>wo</u> ich wohne</i> = die Stadt, in der ich wohne. Both are fine.</div>
+      <div class="tip"><b>Not dass!</b><i>das Buch, <u>das</u> ich lese</i> (relative pronoun) vs <i>Ich weiß, <u>dass</u> …</i> (conjunction).</div>
+    </div>
+  </section>`;
+
+  drawRelTool();
+}
+
+function drawRelTool() {
+  const st = relState;
+  const x = REL_NOUNS.find(n => n.n === st.noun);
+  const clauses = REL_CLAUSES.map((c, i) => [i, c]).filter(([, c]) => c.kinds.includes(x.kind));
+  if (!clauses.find(([i]) => i === st.clause)) st.clause = clauses[0][0];
+  const mains = REL_MAINS.map((m, i) => [i, m]).filter(([, m]) => m.kinds.includes(x.kind));
+  if (!mains.find(([i]) => i === st.main)) st.main = mains[0][0];
+  const cl = REL_CLAUSES[st.clause];
+  const main = REL_MAINS[st.main];
+  const b = relBuild(x, cl, main);
+  const chips = (key, list) => `<div class="chips">${list.map(([v, l]) => `<button class="chipbtn ${String(st[key]) === String(v) ? 'on' : ''}" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  $('#relTool').innerHTML = `
+    <div class="bgrid">
+      <div><h4>Noun</h4>${chips('noun', REL_NOUNS.map(n => [n.n, `${GART[n.g]} ${n.n}`]))}</div>
+      <div><h4>Main clause</h4>${chips('main', mains.map(([i, m]) => [i, relPick(m.s, x).replace('{X}', '…').replace(',', '')]))}</div>
+      <div><h4>Relative clause</h4>${chips('clause', clauses.map(([i, c]) => [i, relPick(c.s, x).replace('{R}', '…')]))}</div>
+    </div>
+    <div class="build-out">${b.sentence(hl(cl.c, b.pron))}</div>
+    <div class="explain">${relExplain(x, cl, main, b)}</div>`;
+  $$('#relTool [data-k]').forEach(btn => btn.addEventListener('click', () => {
+    st[btn.dataset.k] = btn.dataset.k === 'noun' ? btn.dataset.v : +btn.dataset.v;
+    drawRelTool();
+  }));
+}
+
+/* =========================================================
+   PLURALS
+   ========================================================= */
+
+const UMLAUT = { a: 'ä', o: 'ö', u: 'ü', A: 'Ä', O: 'Ö', U: 'Ü' };
+// Umlaut on the last a/o/u/au (Haus → Häus, Apfel → Äpfel). Only for one-syllable words
+// and words ending in -er/-el/-en, where an umlaut plural is realistic.
+function umlautStem(w) {
+  const syllables = (w.match(/[aeiouäöüy]+/gi) || []).length;
+  if (syllables > 1 && !/(er|el|en)$/.test(w)) return null;
+  const m = [...w.matchAll(/au|Au|[aouAOU]/g)].pop();
+  if (!m || m.index + m[0].length >= w.length || (syllables === 1 && m.index === 0)) return null;
+  return w.slice(0, m.index) + UMLAUT[m[0][0]] + w.slice(m.index + 1);
+}
+
+// Dictionary notation: der Tag, -e · der Stuhl, ¨-e · das Zimmer, -
+function plCode(x) {
+  if (x.r === 'latin') return x.pl;
+  return (x.pl.startsWith(x.n) ? '' : '¨') + '-' + x.pl.slice(x.n.length);
+}
+
+const plDative = x => (/[ns]$/.test(x.pl) ? x.pl : x.pl + 'n');
+
+// Wrong plurals built from the other patterns, only the ones that could look right
+function pluralDistractors(x) {
+  const w = x.n;
+  const u = umlautStem(w);
+  let cands;
+  if (/e$/.test(w)) cands = [w + 'n', w + 's', w];
+  else if (/en$/.test(w)) cands = [w, w + 's', w + 'e', u];
+  else if (/(el|er)$/.test(w)) cands = [w, w + 'n', w + 's', u];
+  else cands = [w + 'e', w + 'er', w + 'en', w + 's', w, u && u + 'e', u && u + 'er'];
+  return shuffle(uniq(cands.filter(Boolean)).filter(c => c !== x.pl)).slice(0, 3);
+}
+
+function pluralRuleHtml(x) {
+  const r = PLURAL_RULES[x.r];
+  if (!r) return 'No rule of thumb for this one: learn it with its plural.';
+  return `<b>${r.see}</b> → ${r.how} <b>${r.pl}</b>${r.note ? `<br><small>${r.note}</small>` : ''}`;
+}
+
+function renderPlurals() {
+  const pairs = list => list.map(x => `${GART[x.g]} ${x.n} → die <b>${x.pl}</b>`).join('<br>');
+  const notation = [
+    ['-e', 'add -e', 'der Tag, -e → die Tage'], ['¨-e', 'umlaut + -e', 'der Stuhl, ¨-e → die Stühle'],
+    ['-er / ¨-er', '(umlaut +) -er', 'das Buch, ¨-er → die Bücher'], ['-n / -en', 'add -(e)n', 'die Frau, -en → die Frauen'],
+    ['-s', 'add -s', 'das Auto, -s → die Autos'], ['-', 'no change', 'das Zimmer, - → die Zimmer'], ['¨-', 'umlaut only', 'der Apfel, ¨- → die Äpfel'],
+  ];
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Plurals</h2>
+    <p class="lead">The article is easy: in the plural it is <b>always die</b>. The ending is the tricky part. There are five patterns.</p>
+    <div class="tips">${PLURAL_PATTERN_KEYS.map(p => `<div class="tip"><b>${PLURAL_PATTERNS[p].label}</b>${PLURAL_PATTERNS[p].note}<div class="ppex">${pairs(PLURAL_NOUNS.filter(x => x.p === p).slice(0, 4))}</div></div>`).join('')}</div>
+  </section>
+
+  <section class="card">
+    <h2>Rules of thumb</h2>
+    <p class="muted">Look at the gender and the ending of the singular.</p>
+    <div class="tw"><table>
+      <thead><tr><th>When you see …</th><th>the plural is …</th><th>How sure?</th><th>Examples</th></tr></thead>
+      <tbody>${PLURAL_RULE_KEYS.map(k => {
+        const r = PLURAL_RULES[k];
+        const ex = PLURAL_NOUNS.filter(x => x.r === k).slice(0, 3).map(x => `${x.n} → ${x.pl}`).join(', ');
+        return `<tr><th>${r.see}</th><td class="f">${r.pl}</td><td class="muted">${r.how}</td><td>${ex}</td></tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Reading a dictionary</h2>
+    <p class="muted">Dictionaries write the plural as a short code after the noun. Learn every noun like this: <b>der Tisch, -e</b>.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Code</th><th>Means</th><th>Example</th></tr></thead>
+      <tbody>${notation.map(([c, m, e]) => `<tr><th>${c}</th><td>${m}</td><td>${e}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Plurals in the four cases</h2>
+    <div class="forms4">
+      <div class="fcell nom"><div class="lab">Nominativ</div><div class="big">die</div><div class="ex">Die Kinder spielen.</div></div>
+      <div class="fcell akk"><div class="lab">Akkusativ</div><div class="big">die</div><div class="ex">Ich sehe die Kinder.</div></div>
+      <div class="fcell dat"><div class="lab">Dativ</div><div class="big">den …n</div><div class="ex">Ich spiele mit den Kinder<u>n</u>.</div></div>
+      <div class="fcell gen"><div class="lab">Genitiv</div><div class="big">der</div><div class="ex">die Namen der Kinder</div></div>
+    </div>
+    <div class="tips">
+      <div class="tip"><b>Dativ plural: add -n</b><i>mit den Kindern, den Äpfeln, den Tagen</i>, unless the plural already ends in -n or -s: <i>mit den Frauen, den Autos</i>.</div>
+      <div class="tip"><b>No article? Same endings</b><i>Ich spiele mit Kindern.</i> The -n stays.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>All words by pattern</h2>
+    <div class="tips">${PLURAL_PATTERN_KEYS.map(p => `<div class="tip"><b>${PLURAL_PATTERNS[p].label}</b><div class="ppex">${PLURAL_NOUNS.filter(x => x.p === p).map(x => `${x.n}, <span class="muted">${plCode(x)}</span>`).join('<br>')}</div></div>`).join('')}</div>
+  </section>`;
+}
+
+/* =========================================================
    PERFEKT
    ========================================================= */
 
@@ -1301,6 +1533,189 @@ function drawPraetBuilder() {
 }
 
 /* =========================================================
+   KONJUNKTIV II
+   ========================================================= */
+
+const K2_SUBJ_DEFAULT = PRONOUN_KEYS.filter(k => k !== 'es');
+const k2Form = (inf, key) => K2_FORMS[inf][CONJ_INDEX[key]];
+const markUmlaut = s => s.replace(/[äöü]/, '<span class="end">$&</span>');
+// wärst / wärt also exist as wärest / wäret
+const K2_ALT = { wärst: 'wärest', wärt: 'wäret' };
+
+// Fill a template; gaps = { V, V1, V2 } as HTML
+function k2Sentence(t, key, gaps) {
+  const p = PRONOUNS[key].nom;
+  let s = t.s.replace('{S2}', p).replace('{S}', p);
+  for (const g of ['V', 'V1', 'V2']) s = s.replace(`{${g}}`, gaps[g] || '');
+  return cap(s);
+}
+
+// Typical wrong answers: Präteritum (konnte), present (kann), another person's form
+function k2Distractors(inf, key) {
+  const i = CONJ_INDEX[key];
+  const pv = PRAET_VERBS.find(v => v.inf === inf);
+  const out = [pv ? praetForm(pv, key) : null, (PRESENT_AUX[inf] || MODAL_PRESENT[inf])[i], K2_FORMS[inf][i === 0 || i === 2 ? 3 : 0]];
+  return out.filter(x => x && x !== k2Form(inf, key));
+}
+
+function k2Table() {
+  const headInf = inf => { const pv = PRAET_VERBS.find(v => v.inf === inf); return `${inf}<span class="sub">${pv ? pv.p + ' →' : ''}</span>`; };
+  return `<div class="tw"><table><thead><tr><th></th>${K2_VERBS.map(inf => `<th>${headInf(inf)}</th>`).join('')}</tr></thead><tbody>
+    ${PRAET_KEYS.map(k => `<tr><th>${PRAET_KEY_LABEL[k]}</th>${K2_VERBS.map(inf => `<td class="f">${markUmlaut(k2Form(inf, k))}</td>`).join('')}</tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+function renderKonjunktiv() {
+  const USE_EX = {
+    polite: ['Könnten Sie mir helfen?', 'Ich hätte gern einen Kaffee.'],
+    wish: ['Ich wäre jetzt gern am Meer.', 'Wenn ich doch mehr Zeit hätte!'],
+    advice: ['Du solltest mehr schlafen.', 'An deiner Stelle würde ich zum Arzt gehen.'],
+    unreal: ['Wenn ich reich wäre, würde ich reisen.', 'Was würdest du machen?'],
+  };
+  const blocks = list => woBlocks({ prefix: '', punct: '.', form: 'k2', cl: {}, chunks: list.map(([t, r, comma]) => ({ t, r, comma })) });
+  const pairs = [
+    ['Ich habe Zeit.', 'Ich hätte Zeit.'], ['Ich bin reich.', 'Ich wäre reich.'], ['Ich kann dir helfen.', 'Ich könnte dir helfen.'],
+    ['Er weiß es.', 'Er wüsste es.'], ['Ich fahre nach Spanien.', 'Ich würde nach Spanien fahren.'],
+  ];
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Konjunktiv II: the “would” form</h2>
+    <p class="lead">Use it for what is <b>not real</b> (or not real yet): polite requests, wishes, advice and imagined situations.</p>
+    <div class="conn3">${Object.keys(USE_EX).map(u => `<div class="ww dat"><div class="big">${K2_USES[u].icon} ${cap(K2_USES[u].label)}</div><p>${USE_EX[u].map(e => `<i>${e}</i>`).join('<br>')}</p></div>`).join('')}</div>
+  </section>
+
+  <section class="card">
+    <h2>How to build it</h2>
+    <div class="tips">
+      <div class="tip"><b>1 · Most verbs: würde + infinitive</b><i>Ich <u>würde</u> gern nach Spanien <u>fahren</u>.</i> The infinitive goes to the end, like with a modal verb.</div>
+      <div class="tip"><b>2 · The important ones have their own form</b>Präteritum + umlaut: <i>war → wäre, hatte → hätte, konnte → könnte, musste → müsste, durfte → dürfte, mochte → möchte, wusste → wüsste</i>.</div>
+      <div class="tip"><b>3 · sollen and wollen</b><i>sollte, wollte</i> look exactly like the Präteritum. The context tells you which one it is.</div>
+    </div>
+    <h4>All forms <small>(the umlaut is what makes it Konjunktiv)</small></h4>
+    ${k2Table()}
+  </section>
+
+  <section class="card">
+    <h2>Real or not real?</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Real (Indikativ)</th><th>Not real (Konjunktiv II)</th></tr></thead>
+      <tbody>${pairs.map(([a, b]) => `<tr><td>${a}</td><td class="f">${markUmlaut(b)}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>wenn-sentences</h2>
+    <p class="muted">The wenn-part has its verb at the end (it's a Nebensatz). It is position 1, so the main clause starts with its verb.</p>
+    ${blocks([['Wenn', 'X'], ['ich', 'S'], ['reich', 'X'], ['wäre', 'VE', true], ['würde', 'V'], ['ich', 'S'], ['um die Welt', 'X'], ['reisen', 'E']])}
+    ${blocks([['Wenn', 'X'], ['ich', 'S'], ['ein Auto', 'X'], ['hätte', 'VE', true], ['könnte', 'V'], ['ich', 'S'], ['ans Meer', 'X'], ['fahren', 'E']])}
+    <h4>In the past: hätte / wäre + participle</h4>
+    ${blocks([['Wenn', 'X'], ['ich', 'S'], ['Zeit', 'X'], ['gehabt', 'E'], ['hätte', 'VE', true], ['wäre', 'V'], ['ich', 'S'], ['gekommen', 'E']])}
+    <p class="muted">haben or sein follows the Perfekt rules: <i>ich habe … gehabt → ich hätte … gehabt</i>, <i>ich bin gekommen → ich wäre gekommen</i>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Tips</h2>
+    <div class="tips">
+      <div class="tip"><b>konnte or könnte?</b><i>Ich konnte schwimmen</i> = I was able to (past). <i>Ich könnte schwimmen</i> = I could / would be able to.</div>
+      <div class="tip"><b>Not “würde haben / würde sein”</b>Use <i>hätte</i> and <i>wäre</i> instead. Same for the modals: <i>könnte</i>, not “würde können”.</div>
+      <div class="tip"><b>möchte = would like</b><i>Ich möchte einen Tee.</i> The polite form of <i>Ich will …</i></div>
+      <div class="tip"><b>Useful phrases</b><i>Wenn ich du wäre, … · Es wäre schön, wenn … · An deiner Stelle würde ich … · Hätten Sie kurz Zeit?</i></div>
+      <div class="tip"><b>Without wenn</b>Start with the verb instead: <i>Wäre ich reich, würde ich reisen.</i></div>
+    </div>
+  </section>`;
+}
+
+/* =========================================================
+   VERBS + PREPOSITIONS
+   ========================================================= */
+
+const startsVowel = p => /^[aeiouäöü]/.test(p);
+const daWord = p => `da${startsVowel(p) ? 'r' : ''}${p}`;
+const woWordP = p => `wo${startsVowel(p) ? 'r' : ''}${p}`;
+const PERS_KEY = { m: 'er', f: 'sie', n: 'es' };
+// "auf den Bus", with short forms where German uses them (vom Urlaub, zum Geburtstag, am Kurs)
+function vpPhrase(x) {
+  const { art, short } = wwParts(x.prep, x.c, x.g);
+  return short ? `${short} ${x.n}` : `${x.prep} ${art} ${x.n}`;
+}
+const vpSentence = (x, mid) => x.s.replace('{PA} {N}', mid);
+// Things → darauf; people and animals → auf ihn
+const vpReplace = x => (x.person ? `${x.prep} ${PRONOUNS[PERS_KEY[x.g]][x.c]}` : daWord(x.prep));
+// Things → Worauf; people → Auf wen
+const vpQuestion = x => (x.person ? `${cap(x.prep)} ${x.c === 'akk' ? 'wen' : 'wem'}` : cap(woWordP(x.prep)));
+const vpVerb = x => x.v.replace(/ \S+$/, '');
+
+// One example per verb + preposition, for lists
+const vpUnique = () => VERB_PREPS.filter((x, i) => VERB_PREPS.findIndex(y => y.v === x.v) === i);
+
+function vpRows(list) {
+  return list.map(x => `<tr data-search="${esc((x.v + ' ' + x.en).toLowerCase())}"><th>${x.v} ${tag(x.c, CASES[x.c].short)}<span class="sub">${x.en}</span></th><td>${vpSentence(x, `<b>${vpPhrase(x)}</b>`)}</td></tr>`).join('');
+}
+
+function renderVerbPrep() {
+  const list = vpUnique();
+  const daRows = uniq(VERB_PREPS.map(x => x.prep)).map(p => `<tr><th>${p}</th><td class="f">${daWord(p)}</td><td class="f">${woWordP(p)}</td></tr>`).join('');
+  const bus = VERB_PREPS.find(x => x.n === 'Bus');
+  const lehrer = VERB_PREPS.find(x => x.n === 'Lehrer' && x.prep === 'auf');
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Verbs with a fixed preposition</h2>
+    <p class="lead">Many verbs always come with the same preposition, and that preposition always takes the same case. Learn them as <b>one unit</b>: <i>warten auf + Akk</i>, <i>Angst haben vor + Dat</i>.</p>
+    <div class="tips">
+      <div class="tip"><b>Wo / Wohin doesn't count here</b>The verb decides the case, not the meaning: <i>Ich warte <u>auf den</u> Bus</i> (no movement, still Akk).</div>
+      <div class="tip"><b>auf and über: almost always Akk</b>With verbs, auf and über nearly always take the Akkusativ.</div>
+      <div class="tip"><b>an: it depends</b><i>denken an + Akk</i>, but <i>teilnehmen an + Dat</i>. Learn each one.</div>
+      <div class="tip"><b>mit, von, zu, nach, bei, vor: Dativ</b>mit, von, zu, nach and bei are always Dativ anyway. vor with verbs is Dativ too: <i>Angst vor dem Hund</i>.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The list</h2>
+    <div class="typerow"><input type="text" id="vpSearch" placeholder="Search: warten, afraid, über …" autocomplete="off" spellcheck="false"></div>
+    <div class="bgrid vpcols">
+      <div><h4>${tag('akk')}</h4><div class="tw"><table><tbody id="vpAkk">${vpRows(list.filter(x => x.c === 'akk'))}</tbody></table></div></div>
+      <div><h4>${tag('dat')}</h4><div class="tw"><table><tbody id="vpDat">${vpRows(list.filter(x => x.c === 'dat'))}</tbody></table></div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Same verb, different preposition</h2>
+    <div class="tw"><table>
+      <tbody>
+        <tr><th>sich freuen <b>auf</b> + Akk</th><td>something in the future: <i>Ich freue mich auf das Wochenende.</i></td></tr>
+        <tr><th>sich freuen <b>über</b> + Akk</th><td>something now or in the past: <i>Ich freue mich über das Geschenk.</i></td></tr>
+        <tr><th>sprechen <b>mit</b> + Dat</th><td>the person: <i>Ich spreche mit dem Lehrer.</i></td></tr>
+        <tr><th>sprechen <b>über</b> + Akk</th><td>the topic: <i>Wir sprechen über das Problem.</i></td></tr>
+        <tr><th>denken <b>an</b> + Akk</th><td>to have in mind: <i>Ich denke an dich.</i></td></tr>
+        <tr><th>nachdenken <b>über</b> + Akk</th><td>to think something through: <i>Ich denke über die Frage nach.</i></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>da- and wo- words</h2>
+    <p class="muted">For <b>things</b>, replace "preposition + noun" with da(r)- + preposition, and ask with wo(r)- + preposition. The <b>r</b> is added when the preposition starts with a vowel.</p>
+    <div class="wowohin">
+      <div class="ww dat"><div class="big">📦 Things</div><p>${vpSentence(bus, `<b>${vpPhrase(bus)}</b>`)}<br>→ ${vpSentence(bus, `<b>${vpReplace(bus)}</b>`)}<br>→ <b>${vpQuestion(bus)}</b> ${bus.q.replace('{W} ', '')}</p></div>
+      <div class="ww akk"><div class="big">🧑 People (and animals)</div><p>${vpSentence(lehrer, `<b>${vpPhrase(lehrer)}</b>`)}<br>→ ${vpSentence(lehrer, `<b>${vpReplace(lehrer)}</b>`)}<br>→ <b>${vpQuestion(lehrer)}</b> ${lehrer.q.replace('{W} ', '')}</p></div>
+    </div>
+    <h4>All forms</h4>
+    <div class="tw"><table><thead><tr><th>Preposition</th><th>da-word</th><th>wo-word</th></tr></thead><tbody>${daRows}</tbody></table></div>
+    <div class="tips">
+      <div class="tip"><b>da-word + a whole clause</b><i>Ich freue mich <u>darauf</u>, dass du kommst. · Ich freue mich <u>darauf</u>, dich zu sehen.</i> The da-word points ahead to the clause.</div>
+      <div class="tip"><b>Spoken shortcut</b>People often say <i>Auf was wartest du?</i> instead of <i>Worauf wartest du?</i> Fine when speaking, but write <i>worauf</i>.</div>
+    </div>
+  </section>`;
+
+  $('#vpSearch').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    $$('#vpAkk tr, #vpDat tr').forEach(tr => { tr.style.display = !q || tr.dataset.search.includes(q) ? '' : 'none'; });
+  });
+}
+
+/* =========================================================
    TABLES
    ========================================================= */
 
@@ -1316,7 +1731,7 @@ function renderTables() {
   app.innerHTML = `
   <section class="card">
     <h2>Tables</h2>
-    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a><a href="#t-perf" data-jump>Perfekt participles</a><a href="#t-praet" data-jump>Präteritum</a></div>
+    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a><a href="#t-perf" data-jump>Perfekt participles</a><a href="#t-praet" data-jump>Präteritum</a><a href="#t-k2" data-jump>Konjunktiv II</a><a href="#t-plural" data-jump>Plurals</a><a href="#t-rel" data-jump>Relative pronouns</a><a href="#t-vp" data-jump>Verbs + prepositions</a></div>
   </section>
 
   <section class="card" id="t-art">
@@ -1399,6 +1814,32 @@ function renderTables() {
         <td>${v.perf ? `${CONJ[auxInf(v.perf)].er} ${v.perf.pp}` : PRAET_EXTRA_PERF[v.inf]}</td>
         <td class="muted">${PRAET_TYPES[v.t].label}${v.g ? ` ${PRAET_GROUPS[v.g]}` : ''}</td></tr>`).join('')}</tbody>
     </table></div>
+  </section>
+
+  <section class="card" id="t-k2">
+    <h2>Konjunktiv II</h2>
+    <p class="muted">Every other verb: <b>würde + infinitive</b> (ich würde fahren, du würdest fahren …).</p>
+    ${k2Table()}
+  </section>
+
+  <section class="card" id="t-plural">
+    <h2>Plurals</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Singular</th><th>Plural</th><th>Dictionary</th><th>Dativ plural</th></tr></thead>
+      <tbody>${PLURAL_PATTERN_KEYS.flatMap(p => PLURAL_NOUNS.filter(x => x.p === p)).map(x => `<tr><th>${GART[x.g]} ${x.n}<span class="sub">${x.en}</span></th>
+        <td class="f">die ${x.pl}</td><td class="muted">${plCode(x)}</td><td>den ${plDative(x)}</td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card" id="t-rel">
+    <h2>Relative pronouns</h2>
+    <p class="muted">Gender and number from the noun, case from the relative clause. Highlighted: different from the article.</p>
+    ${relTable()}
+  </section>
+
+  <section class="card" id="t-vp">
+    <h2>Verbs with prepositions</h2>
+    <div class="tw"><table><tbody>${vpRows(vpUnique().filter(x => x.c === 'akk'))}${vpRows(vpUnique().filter(x => x.c === 'dat'))}</tbody></table></div>
   </section>`;
 
   drawPossBody();
@@ -1449,10 +1890,14 @@ const MODES = {
   poss: { title: '🎁 Whose is it?', d: 'mein / sein / ihr … with the right ending.' },
   adj: { title: '✨ Adjective endings', d: 'der alte · ein alter · alter …' },
   refl: { title: '🪞 Reflexive', d: 'mich / mir / sich: myself or someone else?' },
+  rel: { title: '🔗 Relative clauses', d: 'der Mann, den ich kenne …' },
   ww: { title: '📍 Wo or Wohin?', d: 'auf dem Tisch or auf den Tisch? im or ins?' },
   genders: { title: '🏷️ der · die · das', d: 'Noun genders, ending rules, compounds.' },
+  plural: { title: '👥 Plurals', d: 'die Tage, die Kinder, die Autos …' },
   perfekt: { title: '⏮️ Perfekt', d: 'haben or sein? gemacht, gegangen, aufgestanden …' },
   praet: { title: '⏪ Präteritum', d: 'war, hatte, konnte, ging, machte …' },
+  k2: { title: '💭 Konjunktiv II', d: 'würde, hätte, wäre, könnte …' },
+  vp: { title: '🧷 Verbs + prepositions', d: 'warten auf den Bus · worauf? · darauf' },
   wo: { title: '🧩 Word order', d: 'Tap the words into the right order.' },
   mix: { title: '🔀 Mix', d: 'All of the above.' },
   review: { title: '🎯 Weak spots', d: 'More of what you get wrong. Misses come back.' },
@@ -1754,6 +2199,155 @@ const GEN = {
     };
   },
 
+  vp() {
+    const x = rnd(VERB_PREPS);
+    const type = Math.random() < 0.6 ? 'prep' : rnd(['da', 'wo']);
+    const full = vpSentence(x, vpPhrase(x));
+    const blank = '<span class="blank">___</span>';
+    const thingOrPerson = x.person ? 'a person or animal' : 'a thing';
+
+    if (type === 'prep') {
+      const { art, short, answer } = wwParts(x.prep, x.c, x.g);
+      const arts = ['den', 'dem', 'der', 'die', 'das'];
+      const artOpts = typeMode() ? null
+        : (short ? uniq(arts.map(a => (CONTRACT[x.prep] && CONTRACT[x.prep][a]) || `${x.prep} ${a}`)) : arts).map(v => ({ v, l: v }));
+      const check = v => {
+        const t = v.trim().replace(/\s+/g, ' ').toLowerCase();
+        if (t === answer) return { ok: true };
+        if (short && t === `${x.prep} ${art}`) return { ok: true, note: `Correct, but people almost always say <b>${short}</b>.` };
+        return { ok: false };
+      };
+      return {
+        caseKey: x.c,
+        hint: `<i>${x.en}</i> · ${GART[x.g]} ${x.n}`,
+        sentence: vpSentence(x, `<span class="blank">①</span> <span class="blank">②</span> ${x.n}`),
+        steps: [
+          { ask: `① Which preposition goes with <b>${vpVerb(x)}</b>?`, answer: x.prep,
+            options: shuffle([x.prep, ...shuffle(VP_PREPS.filter(p => p !== x.prep)).slice(0, 3)]).map(v => ({ v, l: v })),
+            after: `<b>${x.v}</b> + ${CASES[x.c].name}` },
+          { ask: short ? `② <b>${x.prep}</b> + article for ${GART[x.g]} ${x.n}: use the short form.` : `② The article for <b>${GART[x.g]} ${x.n}</b>:`,
+            options: artOpts, answer, check },
+        ],
+        explain: `<ol>
+          <li><b>${x.v}</b> + ${tag(x.c)} <small>(${x.en})</small>. Learn it as one unit.</li>
+          <li>${GART[x.g]} ${x.n} is ${GENDERS[x.g].name}, ${CASES[x.c].name} → ${hl(x.c, art)}${short ? ` · ${x.prep} + ${art} → ${hl(x.c, short)}` : ''}</li>
+        </ol><div class="full">${vpSentence(x, hl(x.c, vpPhrase(x)))}</div>`,
+      };
+    }
+
+    if (type === 'da') {
+      const ans = vpReplace(x);
+      const other = x.person ? daWord(x.prep) : `${x.prep} ${PRONOUNS[PERS_KEY[x.g]][x.c]}`;
+      const wrongCase = `${x.prep} ${PRONOUNS[PERS_KEY[x.g]][x.c === 'akk' ? 'dat' : 'akk']}`;
+      const otherDa = daWord(rnd(VP_PREPS.filter(p => p !== x.prep)));
+      const options = shuffle(uniq([ans, other, x.person ? wrongCase : otherDa, otherDa])).map(v => ({ v, l: v }));
+      return {
+        sub: 'dawo',
+        hint: `<i>${x.en}</i> · <b>${x.n}</b> is ${thingOrPerson}`,
+        sentence: `${vpSentence(x, `<u>${vpPhrase(x)}</u>`)}<br>→ ${vpSentence(x, blank)}`,
+        steps: [{ ask: 'Replace the underlined part:', options, answer: ans, check: v => ({ ok: v.trim().toLowerCase() === ans.toLowerCase() }) }],
+        explain: (x.person
+          ? `People and animals → preposition + pronoun in the ${CASES[x.c].name}: <b>${ans}</b>`
+          : `Things → da(r) + preposition: <b>${ans}</b>${startsVowel(x.prep) ? ' <small>(r because the preposition starts with a vowel)</small>' : ''}`)
+          + `<div class="full">${vpSentence(x, `<b>${ans}</b>`)}</div>`,
+      };
+    }
+
+    const ans = vpQuestion(x);
+    const other = x.person ? cap(woWordP(x.prep)) : `${cap(x.prep)} ${x.c === 'akk' ? 'wen' : 'wem'}`;
+    const wrongCase = `${cap(x.prep)} ${x.c === 'akk' ? 'wem' : 'wen'}`;
+    const otherWo = cap(woWordP(rnd(VP_PREPS.filter(p => p !== x.prep))));
+    const options = shuffle(uniq([ans, other, x.person ? wrongCase : otherWo, otherWo])).map(v => ({ v, l: v }));
+    const rest = x.q.replace('{W} ', '');
+    return {
+      sub: 'dawo',
+      hint: `<i>${x.en}</i> · the answer is ${thingOrPerson}`,
+      sentence: `${blank} ${rest}<br><span class="muted">— ${cap(vpPhrase(x))}.</span>`,
+      steps: [{ ask: 'Which question word?', options, answer: ans, check: v => ({ ok: v.trim().toLowerCase() === ans.toLowerCase() }) }],
+      explain: (x.person
+        ? `Asking about a person → preposition + ${x.c === 'akk' ? 'wen (Akk)' : 'wem (Dat)'}: <b>${ans}</b>`
+        : `Asking about a thing → wo(r) + preposition: <b>${ans}</b>`)
+        + `<div class="full"><b>${ans}</b> ${rest} — ${cap(vpPhrase(x))}.</div>`,
+    };
+  },
+
+  rel() {
+    const cl = rnd(REL_CLAUSES);
+    const x = rnd(REL_NOUNS.filter(n => cl.kinds.includes(n.kind)));
+    const main = rnd(REL_MAINS.filter(m => m.kinds.includes(x.kind)));
+    const b = relBuild(x, cl, main);
+    // The main clause's article is the classic trap (Ich kenne den Mann, der …)
+    const trap = DEF_ART[main.c][x.g];
+    const pool = uniq([...CASE_KEYS.map(c => REL_PRON[c][x.g]), 'der', 'die', 'das', 'den', 'dem', 'denen', 'dessen', 'deren'])
+      .filter(p => p !== b.pron && p !== trap);
+    const options = typeMode() ? null
+      : shuffle(uniq([b.pron, trap, ...shuffle(pool)]).slice(0, 5)).map(v => ({ v, l: v }));
+    return {
+      caseKey: cl.c,
+      hint: `${x.e} ${GART[x.g]} ${x.n} <small>(${GENDERS[x.g].name})</small>`,
+      sentence: b.sentence('<span class="blank">___</span>'),
+      steps: [
+        { ask: 'Which case does the relative pronoun need <i>in its own clause</i>?',
+          options: CASE_KEYS.map(c => ({ v: c, l: CASES[c].name })), answer: cl.c, after: `Put the noun back in: <i>${b.q}</i>` },
+        { ask: 'So the relative pronoun is:', options, answer: b.pron, check: v => ({ ok: v.trim().toLowerCase() === b.pron }) },
+      ],
+      explain: `${relExplain(x, cl, main, b)}<div class="full">${b.sentence(hl(cl.c, b.pron))}</div>`,
+    };
+  },
+
+  plural() {
+    const x = rnd(PLURAL_NOUNS);
+    const dat = plDative(x);
+    const clean = v => v.trim().replace(/^(die|den)\s+/i, '').toLowerCase();
+    const steps = [{ ask: `Plural of <b>${GART[x.g]} ${x.n}</b>:`, answer: x.pl,
+      options: typeMode() ? null : shuffle([x.pl, ...pluralDistractors(x)]).map(v => ({ v, l: v })),
+      check: v => ({ ok: clean(v) === x.pl.toLowerCase() }) }];
+    // Sometimes also the Dativ plural (only where an -n is added)
+    if (dat !== x.pl && Math.random() < 0.4) {
+      steps.push({ ask: 'And the Dativ plural: <i>mit den …</i>', answer: dat,
+        options: typeMode() ? null : shuffle([x.pl, dat]).map(v => ({ v, l: v })),
+        check: v => ({ ok: clean(v) === dat.toLowerCase() }) });
+    }
+    return {
+      sub: 'pl_' + x.p,
+      hint: `${x.e} <i>${x.en}</i>`,
+      sentence: `${gTag(x.g)} ${x.n} → ${gTag('pl', 'die')} <span class="blank">___</span>`,
+      steps,
+      explain: `<ol>
+        <li>${pluralRuleHtml(x)}</li>
+        <li>Pattern <b>${PLURAL_PATTERNS[x.p].label}</b> · in the dictionary: <b>${GART[x.g]} ${x.n}, ${plCode(x)}</b></li>
+        <li>Dativ plural: ${dat !== x.pl ? `add -n → mit den <b>${dat}</b>` : `it already ends in -${x.pl.slice(-1)}, so no extra -n → mit den <b>${x.pl}</b>`}</li>
+      </ol><div class="full">${GART[x.g]} ${x.n} → die <b>${x.pl}</b></div>`,
+    };
+  },
+
+  k2() {
+    const t = rnd(K2_TEMPLATES);
+    const key = rnd(t.subj || K2_SUBJ_DEFAULT);
+    const P = PRONOUNS[key];
+    const gaps = t.v ? ['V'] : ['V1', 'V2'];
+    const verbs = { V: t.v, V1: t.v1, V2: t.v2 };
+    const fmt = (g, f) => (t.s.startsWith(`{${g}}`) ? cap(f) : f);
+    const answers = Object.fromEntries(gaps.map(g => [g, fmt(g, k2Form(verbs[g], key))]));
+    const marks = gaps.length > 1 ? ['①', '②'] : ['___'];
+    const steps = gaps.map((g, n) => {
+      const ans = answers[g];
+      const check = x => { const v = x.trim().toLowerCase(); return { ok: v === ans.toLowerCase() || K2_ALT[ans.toLowerCase()] === v }; };
+      const options = typeMode() ? null : shuffle(uniq([ans, ...k2Distractors(verbs[g], key).map(x => fmt(g, x))])).map(x => ({ v: x, l: x }));
+      return { ask: `${gaps.length > 1 ? marks[n] + ' ' : ''}<b>${verbs[g]}</b> in Konjunktiv II:`, options, answer: ans, check };
+    });
+    return {
+      sub: t.use,
+      hint: `${K2_USES[t.use].icon} ${K2_USES[t.use].label} · subject: <b>${P.label}</b> <small>(${P.en})</small>`,
+      sentence: k2Sentence(t, key, Object.fromEntries(gaps.map((g, n) => [g, `<span class="blank">${marks[n]}</span>`]))),
+      steps,
+      explain: `<ol>
+        <li>${K2_USES[t.use].rule}</li>
+        ${gaps.map(g => `<li><b>${verbs[g]}</b>: ${K2_HOW[verbs[g]]} → ${P.label} <b>${answers[g]}</b></li>`).join('')}
+      </ol><div class="full">${k2Sentence(t, key, Object.fromEntries(gaps.map(g => [g, `<b>${answers[g]}</b>`])))}</div>`,
+    };
+  },
+
   praet() {
     const v = rnd(PRAET_VERBS);
     const key = rnd(PRONOUN_KEYS.filter(k => k !== 'es'));
@@ -1874,7 +2468,7 @@ function newExercise() {
     return;
   }
   const mode = settings.mode === 'mix'
-    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww', 'genders', 'genders', 'perfekt', 'perfekt', 'praet', 'praet', 'wo', 'wo'])
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'rel', 'rel', 'ww', 'ww', 'genders', 'genders', 'plural', 'plural', 'perfekt', 'perfekt', 'praet', 'praet', 'k2', 'k2', 'vp', 'vp', 'wo', 'wo'])
     : settings.mode;
   cur = { mode, ex: GEN[mode](), step: 0, results: [] };
   drawEx();
@@ -2003,15 +2597,17 @@ function record() {
 
 /* ---------- Weak spots ---------- */
 
-const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww', 'genders', 'perfekt', 'praet', 'wo'];
+const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'rel', 'ww', 'genders', 'plural', 'perfekt', 'praet', 'k2', 'vp', 'wo'];
 // Cases each mode can produce (null = the mode has no case)
-const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'], genders: ['m', 'f', 'n'], perfekt: ['haben', 'sein'], praet: ['regular', 'irregular', 'modal'], wo: ['main', 'question', 'sub', 'conj0', 'adv', 'conj2'] };
+const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], rel: CASE_KEYS, ww: ['akk', 'dat'], genders: ['m', 'f', 'n'], plural: ['pl_e', 'pl_er', 'pl_n', 'pl_s', 'pl_0'], perfekt: ['haben', 'sein'], praet: ['regular', 'irregular', 'modal'], k2: ['polite', 'wish', 'advice', 'unreal', 'past'], vp: ['akk', 'dat', 'dawo'], wo: ['main', 'question', 'sub', 'conj0', 'adv', 'conj2'] };
 const topicKey = (mode, c) => `${mode}:${c || '-'}`;
 // Topic = mode + case, or mode + gender for der/die/das
 const subOf = ex => ex.caseKey || ex.sub;
 const SUB_LABEL = { m: 'der words', f: 'die words', n: 'das words', haben: 'haben verbs', sein: 'sein verbs',
   main: 'main clauses', question: 'questions', sub: 'weil / dass clauses', conj0: 'aber / denn / und', adv: 'deshalb / trotzdem', conj2: 'je … desto & pairs',
-  regular: 'regular verbs', irregular: 'irregular verbs', modal: 'sein, haben & modals' };
+  regular: 'regular verbs', irregular: 'irregular verbs', modal: 'sein, haben & modals',
+  polite: 'polite requests', wish: 'wishes', advice: 'advice', unreal: 'wenn … würde', past: 'hätte / wäre + participle',
+  pl_e: '-e / ¨-e', pl_er: '-er / ¨-er', pl_n: '-(e)n', pl_s: '-s', pl_0: '– / ¨', dawo: 'da- / wo- words' };
 const topicLabel = (mode, c) => `${MODES[mode].title}${c ? ` · ${CASES[c] ? CASES[c].name : SUB_LABEL[c]}` : ''}`;
 const emptyStats = () => ({ modes: {}, cases: {}, topics: {}, mistakes: [] });
 const loadStats = () => Object.assign(emptyStats(), store.get('stats', {}));

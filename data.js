@@ -988,3 +988,308 @@ const PRAET_TYPES = {
   aux: { label: 'sein / haben / werden', rule: 'learn these three by heart: war, hatte, wurde' },
 };
 const PRAET_GROUPS = { a: '→ a', ie: '→ ie', u: '→ u', o: '→ o', special: 'special' };
+
+/* ---------- Konjunktiv II ---------- */
+
+// Forms in the order ich, du, er, wir, ihr, sie/Sie
+const k2Row = stem => [stem, stem + 'st', stem, stem + 'n', stem + 't', stem + 'n'];
+const K2_FORMS = {
+  sein: ['wäre', 'wärst', 'wäre', 'wären', 'wärt', 'wären'],
+  haben: k2Row('hätte'), werden: k2Row('würde'),
+  können: k2Row('könnte'), müssen: k2Row('müsste'), dürfen: k2Row('dürfte'), mögen: k2Row('möchte'),
+  sollen: k2Row('sollte'), wollen: k2Row('wollte'), wissen: k2Row('wüsste'),
+};
+const K2_VERBS = ['sein', 'haben', 'werden', 'können', 'müssen', 'dürfen', 'mögen', 'sollen', 'wollen', 'wissen'];
+// How each form is made, for explanations
+const K2_HOW = {
+  sein: 'war → <b>wäre</b> (Präteritum + umlaut)',
+  haben: 'hatte → <b>hätte</b> (Präteritum + umlaut)',
+  werden: 'wurde → <b>würde</b>. würde + infinitive works for almost every other verb',
+  können: 'konnte → <b>könnte</b> (Präteritum + umlaut)',
+  müssen: 'musste → <b>müsste</b> (Präteritum + umlaut)',
+  dürfen: 'durfte → <b>dürfte</b> (Präteritum + umlaut)',
+  mögen: 'mochte → <b>möchte</b> (Präteritum + umlaut)',
+  sollen: '<b>sollte</b>: looks exactly like the Präteritum (no umlaut)',
+  wollen: '<b>wollte</b>: looks exactly like the Präteritum (no umlaut)',
+  wissen: 'wusste → <b>wüsste</b> (Präteritum + umlaut)',
+};
+// Present tense of the modal verbs (and wissen), used as wrong answers
+const MODAL_PRESENT = {
+  können: ['kann', 'kannst', 'kann', 'können', 'könnt', 'können'],
+  müssen: ['muss', 'musst', 'muss', 'müssen', 'müsst', 'müssen'],
+  dürfen: ['darf', 'darfst', 'darf', 'dürfen', 'dürft', 'dürfen'],
+  mögen: ['mag', 'magst', 'mag', 'mögen', 'mögt', 'mögen'],
+  sollen: ['soll', 'sollst', 'soll', 'sollen', 'sollt', 'sollen'],
+  wollen: ['will', 'willst', 'will', 'wollen', 'wollt', 'wollen'],
+  wissen: ['weiß', 'weißt', 'weiß', 'wissen', 'wisst', 'wissen'],
+};
+
+const K2_USES = {
+  polite: { label: 'polite requests', icon: '🙏', rule: 'Konjunktiv II makes requests polite: <i>Könnten Sie …? Würden Sie …? Ich hätte gern …</i>' },
+  wish: { label: 'wishes', icon: '🌠', rule: 'Wishes: <i>Ich wäre gern … · Wenn ich doch … hätte!</i>' },
+  advice: { label: 'advice', icon: '💡', rule: 'Advice: <i>Du solltest … · An deiner Stelle würde ich …</i>' },
+  unreal: { label: 'wenn … würde', icon: '🤔', rule: 'Imagined situation: <b>wenn</b> + Konjunktiv II (verb at the end), then Konjunktiv II in the main clause (verb first after the comma).' },
+  past: { label: 'hätte / wäre + participle', icon: '⏮️', rule: 'Imagined past: <b>hätte / wäre + participle</b>. haben or sein is chosen like in the Perfekt.' },
+};
+
+// {S} subject, {S2} the same subject later in the sentence, {V}/{V1}/{V2} gaps.
+// subj: allowed pronoun keys (default: all but es)
+const K2_TEMPLATES = [
+  { use: 'polite', s: '{V} {S} mir bitte helfen?', v: 'können', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'polite', s: '{V} {S} bitte das Fenster öffnen?', v: 'können', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'polite', s: '{V} {S} mir bitte das Salz geben?', v: 'werden', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'polite', s: '{V} ich kurz Ihr Telefon benutzen?', v: 'dürfen', subj: ['ich'] },
+  { use: 'polite', s: '{S} {V} gern einen Kaffee.', v: 'haben', subj: ['ich', 'wir'] },
+  { use: 'polite', s: '{S} {V} ein Glas Wasser, bitte.', v: 'mögen', subj: ['ich', 'wir'] },
+  { use: 'wish', s: 'Wenn {S} doch mehr Zeit {V}!', v: 'haben' },
+  { use: 'wish', s: 'Wenn {S} doch schon zu Hause {V}!', v: 'sein' },
+  { use: 'wish', s: '{S} {V} jetzt gern am Meer.', v: 'sein' },
+  { use: 'wish', s: '{S} {V} gern besser Deutsch sprechen.', v: 'werden' },
+  { use: 'wish', s: 'Wenn {S} nur die Antwort {V}!', v: 'wissen' },
+  { use: 'advice', s: '{S} {V} mehr schlafen.', v: 'sollen', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'advice', s: '{S} {V} mal eine Pause machen.', v: 'können', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'advice', s: 'An deiner Stelle {V} ich zum Arzt gehen.', v: 'werden', subj: ['ich'] },
+  { use: 'advice', s: '{S} {V} wirklich weniger arbeiten.', v: 'müssen', subj: ['du', 'ihr', 'Sie'] },
+  { use: 'unreal', s: 'Wenn {S} reich {V1}, {V2} {S2} um die Welt reisen.', v1: 'sein', v2: 'werden' },
+  { use: 'unreal', s: 'Wenn {S} ein Auto {V1}, {V2} {S2} ans Meer fahren.', v1: 'haben', v2: 'können' },
+  { use: 'unreal', s: 'Wenn {S} mehr Zeit {V1}, {V2} {S2} öfter Sport machen.', v1: 'haben', v2: 'werden' },
+  { use: 'unreal', s: 'Wenn {S} nicht so müde {V1}, {V2} {S2} noch ins Kino gehen.', v1: 'sein', v2: 'werden' },
+  { use: 'past', s: 'Wenn {S} Zeit gehabt {V1}, {V2} {S2} gekommen.', v1: 'haben', v2: 'sein' },
+  { use: 'past', s: 'Wenn {S} früher aufgestanden {V1}, {V2} {S2} den Bus nicht verpasst.', v1: 'sein', v2: 'haben' },
+  { use: 'past', s: '{S} {V} das gern früher gewusst.', v: 'haben' },
+  { use: 'past', s: 'Fast {V} {S} den Zug verpasst!', v: 'haben' },
+];
+
+/* ---------- Plurals ---------- */
+
+// The five patterns (umlaut or not is part of each)
+const PLURAL_PATTERNS = {
+  e: { label: '-e / ¨-e', note: 'Mostly masculine (often with umlaut) and short neuter words.' },
+  er: { label: '-er / ¨-er', note: 'Mostly short neuter words. Umlaut whenever possible.' },
+  n: { label: '-(e)n / -nen', note: 'Almost all feminine words, plus words ending in -e.' },
+  s: { label: '-s', note: 'Words ending in a vowel (not -e), foreign words, short forms.' },
+  0: { label: '– / ¨', note: 'Masculine and neuter words ending in -er, -el, -en, -chen, -lein.' },
+};
+const PLURAL_PATTERN_KEYS = ['e', 'er', 'n', 's', '0'];
+
+// Rules of thumb: what you see → what the plural usually is
+const PLURAL_RULES = {
+  fem: { see: 'feminine (die …)', pl: '-(e)n', how: 'almost always' },
+  femx: { see: 'some short feminine words', pl: '¨-e or ¨', how: 'exceptions to learn', note: 'Hand → Hände, Stadt → Städte, Nacht → Nächte, Maus → Mäuse, Mutter → Mütter, Tochter → Töchter' },
+  in: { see: '-in (female people)', pl: '-nen', how: 'always' },
+  suffix: { see: '-ung, -heit, -keit, -schaft, -ion, -tät', pl: '-en', how: 'always' },
+  eend: { see: 'ends in -e', pl: '-n', how: 'almost always' },
+  weak: { see: 'male people / animals ending in -ent, -ant, -e', pl: '-en / -n', how: 'almost always' },
+  erelen: { see: 'masculine / neuter ending in -er, -el, -en', pl: '– (sometimes ¨)', how: 'almost always' },
+  chen: { see: '-chen, -lein', pl: '– (no change)', how: 'always' },
+  masc: { see: 'other masculine words', pl: '-e, often ¨-e', how: 'usually' },
+  neut: { see: 'short neuter words', pl: '-er (¨) or -e', how: 'usually' },
+  vowel: { see: 'ends in a vowel (not -e) or a foreign word', pl: '-s', how: 'usually' },
+  latin: { see: '-um, -ma (Latin / Greek)', pl: 'the ending becomes -en', how: 'usually' },
+};
+const PLURAL_RULE_KEYS = ['fem', 'femx', 'in', 'suffix', 'eend', 'weak', 'erelen', 'chen', 'masc', 'neut', 'vowel', 'latin'];
+
+// p = pattern, r = rule of thumb (none = just learn it)
+const PLURAL_NOUNS = [
+  { n: 'Tag', g: 'm', pl: 'Tage', p: 'e', r: 'masc', e: '📅', en: 'day' },
+  { n: 'Hund', g: 'm', pl: 'Hunde', p: 'e', r: 'masc', e: '🐕', en: 'dog' },
+  { n: 'Tisch', g: 'm', pl: 'Tische', p: 'e', r: 'masc', e: '🪑', en: 'table' },
+  { n: 'Schuh', g: 'm', pl: 'Schuhe', p: 'e', r: 'masc', e: '👟', en: 'shoe' },
+  { n: 'Freund', g: 'm', pl: 'Freunde', p: 'e', r: 'masc', e: '🧑‍🤝‍🧑', en: 'friend' },
+  { n: 'Monat', g: 'm', pl: 'Monate', p: 'e', r: 'masc', e: '🗓️', en: 'month' },
+  { n: 'Stuhl', g: 'm', pl: 'Stühle', p: 'e', r: 'masc', e: '🪑', en: 'chair' },
+  { n: 'Baum', g: 'm', pl: 'Bäume', p: 'e', r: 'masc', e: '🌳', en: 'tree' },
+  { n: 'Zug', g: 'm', pl: 'Züge', p: 'e', r: 'masc', e: '🚆', en: 'train' },
+  { n: 'Sohn', g: 'm', pl: 'Söhne', p: 'e', r: 'masc', e: '👦', en: 'son' },
+  { n: 'Arzt', g: 'm', pl: 'Ärzte', p: 'e', r: 'masc', e: '🧑‍⚕️', en: 'doctor' },
+  { n: 'Kopf', g: 'm', pl: 'Köpfe', p: 'e', r: 'masc', e: '🙂', en: 'head' },
+  { n: 'Platz', g: 'm', pl: 'Plätze', p: 'e', r: 'masc', e: '📍', en: 'square, seat' },
+  { n: 'Jahr', g: 'n', pl: 'Jahre', p: 'e', r: 'neut', e: '📆', en: 'year' },
+  { n: 'Brot', g: 'n', pl: 'Brote', p: 'e', r: 'neut', e: '🍞', en: 'bread' },
+  { n: 'Geschenk', g: 'n', pl: 'Geschenke', p: 'e', r: 'neut', e: '🎁', en: 'present' },
+  { n: 'Problem', g: 'n', pl: 'Probleme', p: 'e', r: 'neut', e: '❗', en: 'problem' },
+  { n: 'Hand', g: 'f', pl: 'Hände', p: 'e', r: 'femx', e: '✋', en: 'hand' },
+  { n: 'Stadt', g: 'f', pl: 'Städte', p: 'e', r: 'femx', e: '🏙️', en: 'city' },
+  { n: 'Nacht', g: 'f', pl: 'Nächte', p: 'e', r: 'femx', e: '🌙', en: 'night' },
+  { n: 'Maus', g: 'f', pl: 'Mäuse', p: 'e', r: 'femx', e: '🐭', en: 'mouse' },
+
+  { n: 'Kind', g: 'n', pl: 'Kinder', p: 'er', r: 'neut', e: '🧒', en: 'child' },
+  { n: 'Bild', g: 'n', pl: 'Bilder', p: 'er', r: 'neut', e: '🖼️', en: 'picture' },
+  { n: 'Ei', g: 'n', pl: 'Eier', p: 'er', r: 'neut', e: '🥚', en: 'egg' },
+  { n: 'Lied', g: 'n', pl: 'Lieder', p: 'er', r: 'neut', e: '🎵', en: 'song' },
+  { n: 'Buch', g: 'n', pl: 'Bücher', p: 'er', r: 'neut', e: '📕', en: 'book' },
+  { n: 'Haus', g: 'n', pl: 'Häuser', p: 'er', r: 'neut', e: '🏠', en: 'house' },
+  { n: 'Glas', g: 'n', pl: 'Gläser', p: 'er', r: 'neut', e: '🥛', en: 'glass' },
+  { n: 'Land', g: 'n', pl: 'Länder', p: 'er', r: 'neut', e: '🌍', en: 'country' },
+  { n: 'Wort', g: 'n', pl: 'Wörter', p: 'er', r: 'neut', e: '💬', en: 'word' },
+  { n: 'Dorf', g: 'n', pl: 'Dörfer', p: 'er', r: 'neut', e: '🏘️', en: 'village' },
+  { n: 'Fahrrad', g: 'n', pl: 'Fahrräder', p: 'er', r: 'neut', e: '🚲', en: 'bicycle' },
+  { n: 'Mann', g: 'm', pl: 'Männer', p: 'er', e: '👨', en: 'man' },
+
+  { n: 'Frau', g: 'f', pl: 'Frauen', p: 'n', r: 'fem', e: '👩', en: 'woman' },
+  { n: 'Tür', g: 'f', pl: 'Türen', p: 'n', r: 'fem', e: '🚪', en: 'door' },
+  { n: 'Uhr', g: 'f', pl: 'Uhren', p: 'n', r: 'fem', e: '⏰', en: 'clock' },
+  { n: 'Schwester', g: 'f', pl: 'Schwestern', p: 'n', r: 'fem', e: '👧', en: 'sister' },
+  { n: 'Lampe', g: 'f', pl: 'Lampen', p: 'n', r: 'eend', e: '💡', en: 'lamp' },
+  { n: 'Tasche', g: 'f', pl: 'Taschen', p: 'n', r: 'eend', e: '👜', en: 'bag' },
+  { n: 'Straße', g: 'f', pl: 'Straßen', p: 'n', r: 'eend', e: '🛣️', en: 'street' },
+  { n: 'Woche', g: 'f', pl: 'Wochen', p: 'n', r: 'eend', e: '📆', en: 'week' },
+  { n: 'Blume', g: 'f', pl: 'Blumen', p: 'n', r: 'eend', e: '🌸', en: 'flower' },
+  { n: 'Auge', g: 'n', pl: 'Augen', p: 'n', r: 'eend', e: '👁️', en: 'eye' },
+  { n: 'Zeitung', g: 'f', pl: 'Zeitungen', p: 'n', r: 'suffix', e: '📰', en: 'newspaper' },
+  { n: 'Wohnung', g: 'f', pl: 'Wohnungen', p: 'n', r: 'suffix', e: '🏠', en: 'flat' },
+  { n: 'Information', g: 'f', pl: 'Informationen', p: 'n', r: 'suffix', e: 'ℹ️', en: 'information' },
+  { n: 'Universität', g: 'f', pl: 'Universitäten', p: 'n', r: 'suffix', e: '🎓', en: 'university' },
+  { n: 'Freundschaft', g: 'f', pl: 'Freundschaften', p: 'n', r: 'suffix', e: '🤝', en: 'friendship' },
+  { n: 'Freundin', g: 'f', pl: 'Freundinnen', p: 'n', r: 'in', e: '👭', en: 'female friend' },
+  { n: 'Lehrerin', g: 'f', pl: 'Lehrerinnen', p: 'n', r: 'in', e: '👩‍🏫', en: 'female teacher' },
+  { n: 'Ärztin', g: 'f', pl: 'Ärztinnen', p: 'n', r: 'in', e: '👩‍⚕️', en: 'female doctor' },
+  { n: 'Student', g: 'm', pl: 'Studenten', p: 'n', r: 'weak', e: '🎓', en: 'student' },
+  { n: 'Junge', g: 'm', pl: 'Jungen', p: 'n', r: 'weak', e: '👦', en: 'boy' },
+  { n: 'Elefant', g: 'm', pl: 'Elefanten', p: 'n', r: 'weak', e: '🐘', en: 'elephant' },
+  { n: 'Bett', g: 'n', pl: 'Betten', p: 'n', e: '🛏️', en: 'bed' },
+  { n: 'Museum', g: 'n', pl: 'Museen', p: 'n', r: 'latin', e: '🏛️', en: 'museum' },
+  { n: 'Zentrum', g: 'n', pl: 'Zentren', p: 'n', r: 'latin', e: '🎯', en: 'centre' },
+  { n: 'Thema', g: 'n', pl: 'Themen', p: 'n', r: 'latin', e: '💬', en: 'topic' },
+  { n: 'Firma', g: 'f', pl: 'Firmen', p: 'n', r: 'latin', e: '🏢', en: 'company' },
+
+  { n: 'Auto', g: 'n', pl: 'Autos', p: 's', r: 'vowel', e: '🚗', en: 'car' },
+  { n: 'Handy', g: 'n', pl: 'Handys', p: 's', r: 'vowel', e: '📱', en: 'mobile phone' },
+  { n: 'Kino', g: 'n', pl: 'Kinos', p: 's', r: 'vowel', e: '🎬', en: 'cinema' },
+  { n: 'Foto', g: 'n', pl: 'Fotos', p: 's', r: 'vowel', e: '📷', en: 'photo' },
+  { n: 'Baby', g: 'n', pl: 'Babys', p: 's', r: 'vowel', e: '👶', en: 'baby' },
+  { n: 'Oma', g: 'f', pl: 'Omas', p: 's', r: 'vowel', e: '👵', en: 'grandma' },
+  { n: 'Hotel', g: 'n', pl: 'Hotels', p: 's', r: 'vowel', e: '🏨', en: 'hotel' },
+  { n: 'Café', g: 'n', pl: 'Cafés', p: 's', r: 'vowel', e: '☕', en: 'café' },
+
+  { n: 'Lehrer', g: 'm', pl: 'Lehrer', p: '0', r: 'erelen', e: '🧑‍🏫', en: 'teacher' },
+  { n: 'Zimmer', g: 'n', pl: 'Zimmer', p: '0', r: 'erelen', e: '🛋️', en: 'room' },
+  { n: 'Fenster', g: 'n', pl: 'Fenster', p: '0', r: 'erelen', e: '🪟', en: 'window' },
+  { n: 'Löffel', g: 'm', pl: 'Löffel', p: '0', r: 'erelen', e: '🥄', en: 'spoon' },
+  { n: 'Schlüssel', g: 'm', pl: 'Schlüssel', p: '0', r: 'erelen', e: '🔑', en: 'key' },
+  { n: 'Koffer', g: 'm', pl: 'Koffer', p: '0', r: 'erelen', e: '🧳', en: 'suitcase' },
+  { n: 'Kuchen', g: 'm', pl: 'Kuchen', p: '0', r: 'erelen', e: '🍰', en: 'cake' },
+  { n: 'Apfel', g: 'm', pl: 'Äpfel', p: '0', r: 'erelen', e: '🍎', en: 'apple' },
+  { n: 'Vater', g: 'm', pl: 'Väter', p: '0', r: 'erelen', e: '👨', en: 'father' },
+  { n: 'Bruder', g: 'm', pl: 'Brüder', p: '0', r: 'erelen', e: '👦', en: 'brother' },
+  { n: 'Garten', g: 'm', pl: 'Gärten', p: '0', r: 'erelen', e: '🌻', en: 'garden' },
+  { n: 'Vogel', g: 'm', pl: 'Vögel', p: '0', r: 'erelen', e: '🐦', en: 'bird' },
+  { n: 'Mutter', g: 'f', pl: 'Mütter', p: '0', r: 'femx', e: '👩', en: 'mother' },
+  { n: 'Tochter', g: 'f', pl: 'Töchter', p: '0', r: 'femx', e: '👧', en: 'daughter' },
+  { n: 'Mädchen', g: 'n', pl: 'Mädchen', p: '0', r: 'chen', e: '👧', en: 'girl' },
+  { n: 'Brötchen', g: 'n', pl: 'Brötchen', p: '0', r: 'chen', e: '🥯', en: 'bread roll' },
+];
+
+/* ---------- Relative clauses ---------- */
+
+// Like der/die/das, except the four special forms: denen, dessen, deren
+const REL_PRON = {
+  nom: { m: 'der', f: 'die', n: 'das', pl: 'die' },
+  akk: { m: 'den', f: 'die', n: 'das', pl: 'die' },
+  dat: { m: 'dem', f: 'der', n: 'dem', pl: 'denen' },
+  gen: { m: 'dessen', f: 'deren', n: 'dessen', pl: 'deren' },
+};
+
+// kind decides which clauses make sense. dat / gen: noun form when it changes.
+const REL_NOUNS = [
+  { n: 'Mann', g: 'm', gen: 'Mannes', kind: 'person', e: '👨' },
+  { n: 'Frau', g: 'f', kind: 'person', e: '👩' },
+  { n: 'Kind', g: 'n', gen: 'Kindes', kind: 'person', e: '🧒' },
+  { n: 'Lehrer', g: 'm', gen: 'Lehrers', kind: 'person', e: '🧑‍🏫' },
+  { n: 'Ärztin', g: 'f', kind: 'person', e: '👩‍⚕️' },
+  { n: 'Kinder', g: 'pl', dat: 'Kindern', kind: 'person', e: '🧒' },
+  { n: 'Nachbarn', g: 'pl', kind: 'person', e: '🏘️' },
+  { n: 'Buch', g: 'n', gen: 'Buches', kind: 'thing', e: '📕' },
+  { n: 'Schlüssel', g: 'm', gen: 'Schlüssels', kind: 'thing', e: '🔑' },
+  { n: 'Tasche', g: 'f', kind: 'thing', e: '👜' },
+  { n: 'Bücher', g: 'pl', dat: 'Büchern', kind: 'thing', e: '📚' },
+  { n: 'Laptop', g: 'm', gen: 'Laptops', kind: 'thing', e: '💻' },
+  { n: 'Haus', g: 'n', gen: 'Hauses', kind: 'place', e: '🏠' },
+  { n: 'Wohnung', g: 'f', kind: 'place', e: '🏢' },
+  { n: 'Stadt', g: 'f', kind: 'place', e: '🏙️' },
+  { n: 'Auto', g: 'n', gen: 'Autos', kind: 'vehicle', e: '🚗' },
+  { n: 'Bus', g: 'm', gen: 'Busses', kind: 'vehicle', e: '🚌' },
+  { n: 'Bahn', g: 'f', kind: 'vehicle', e: '🚆' },
+];
+
+// The relative clause. {R} = relative pronoun gap. q = the same idea as a normal sentence,
+// with {X} = the noun in its case: that shows which case the pronoun needs.
+// s / q may be [singular, plural] when the verb changes.
+const REL_CLAUSES = [
+  { c: 'nom', s: ['{R} dort wohnt', '{R} dort wohnen'], q: ['{X} wohnt dort.', '{X} wohnen dort.'], kinds: ['person'] },
+  { c: 'nom', s: ['{R} neben mir sitzt', '{R} neben mir sitzen'], q: ['{X} sitzt neben mir.', '{X} sitzen neben mir.'], kinds: ['person'] },
+  { c: 'nom', s: ['{R} auf dem Tisch liegt', '{R} auf dem Tisch liegen'], q: ['{X} liegt auf dem Tisch.', '{X} liegen auf dem Tisch.'], kinds: ['thing'] },
+  { c: 'nom', s: ['{R} sehr teuer war', '{R} sehr teuer waren'], q: ['{X} war sehr teuer.', '{X} waren sehr teuer.'], kinds: ['thing', 'vehicle', 'place'] },
+  { c: 'akk', s: '{R} ich gestern gesehen habe', q: 'Ich habe {X} gestern gesehen.', kinds: ['person', 'thing', 'vehicle', 'place'] },
+  { c: 'akk', s: '{R} ich gut kenne', q: 'Ich kenne {X} gut.', kinds: ['person'] },
+  { c: 'akk', s: '{R} du suchst', q: 'Du suchst {X}.', kinds: ['thing', 'person'] },
+  { c: 'akk', s: 'für {R} ich das Geschenk gekauft habe', q: 'Ich habe das Geschenk für {X} gekauft.', kinds: ['person'], prep: 'für' },
+  { c: 'dat', s: '{R} ich oft helfe', q: 'Ich helfe {X} oft.', kinds: ['person'] },
+  { c: 'dat', s: '{R} das Fahrrad gehört', q: 'Das Fahrrad gehört {X}.', kinds: ['person'] },
+  { c: 'dat', s: 'mit {R} ich gestern gesprochen habe', q: 'Ich habe gestern mit {X} gesprochen.', kinds: ['person'], prep: 'mit' },
+  { c: 'dat', s: 'in {R} ich wohne', q: 'Ich wohne in {X}.', kinds: ['place'], prep: 'in' },
+  { c: 'dat', s: 'mit {R} ich zur Arbeit fahre', q: 'Ich fahre mit {X} zur Arbeit.', kinds: ['vehicle'], prep: 'mit' },
+  { c: 'gen', s: '{R} Auto vor der Tür steht', q: 'Das Auto {X} steht vor der Tür.', kinds: ['person'] },
+  { c: 'gen', s: '{R} Namen ich vergessen habe', q: 'Ich habe den Namen {X} vergessen.', kinds: ['person'] },
+  { c: 'gen', s: '{R} Farbe mir so gut gefällt', q: 'Die Farbe {X} gefällt mir so gut.', kinds: ['thing', 'vehicle'] },
+];
+
+// The main clause: its case has nothing to do with the relative pronoun's case
+const REL_MAINS = [
+  { c: 'nom', s: ['Das ist {X},', 'Das sind {X},'], kinds: ['person', 'thing', 'vehicle', 'place'] },
+  { c: 'akk', s: 'Ich kenne {X},', kinds: ['person'] },
+  { c: 'akk', s: 'Ich mag {X},', kinds: ['thing', 'vehicle', 'place'] },
+  { c: 'dat', s: 'Ich danke {X},', kinds: ['person'] },
+];
+
+/* ---------- Verbs with fixed prepositions ---------- */
+
+// {PA} = preposition + article gap, {N} = noun, q = W-question with {W} (worauf / auf wen …).
+// person: people and animals use preposition + pronoun (auf ihn), things use da-/wo- words (darauf).
+const VERB_PREPS = [
+  { v: 'warten auf', prep: 'auf', c: 'akk', en: 'to wait for', s: 'Ich warte {PA} {N}.', n: 'Bus', g: 'm', q: '{W} wartest du?' },
+  { v: 'warten auf', prep: 'auf', c: 'akk', en: 'to wait for', s: 'Ich warte {PA} {N}.', n: 'Lehrer', g: 'm', person: true, q: '{W} wartest du?' },
+  { v: 'sich freuen auf', prep: 'auf', c: 'akk', en: 'to look forward to', s: 'Ich freue mich {PA} {N}.', n: 'Wochenende', g: 'n', q: '{W} freust du dich?' },
+  { v: 'sich freuen über', prep: 'über', c: 'akk', en: 'to be happy about', s: 'Ich freue mich {PA} {N}.', n: 'Geschenk', g: 'n', q: '{W} freust du dich?' },
+  { v: 'denken an', prep: 'an', c: 'akk', en: 'to think of', s: 'Ich denke oft {PA} {N}.', n: 'Urlaub', g: 'm', q: '{W} denkst du oft?' },
+  { v: 'denken an', prep: 'an', c: 'akk', en: 'to think of', s: 'Ich denke oft {PA} {N}.', n: 'Oma', g: 'f', person: true, q: '{W} denkst du oft?' },
+  { v: 'sich erinnern an', prep: 'an', c: 'akk', en: 'to remember', s: 'Ich erinnere mich gern {PA} {N}.', n: 'Reise', g: 'f', q: '{W} erinnerst du dich gern?' },
+  { v: 'sich interessieren für', prep: 'für', c: 'akk', en: 'to be interested in', s: 'Ich interessiere mich {PA} {N}.', n: 'Film', g: 'm', q: '{W} interessierst du dich?' },
+  { v: 'sich kümmern um', prep: 'um', c: 'akk', en: 'to take care of', s: 'Ich kümmere mich {PA} {N}.', n: 'Oma', g: 'f', person: true, q: '{W} kümmerst du dich?' },
+  { v: 'sich ärgern über', prep: 'über', c: 'akk', en: 'to be annoyed about', s: 'Ich ärgere mich {PA} {N}.', n: 'Wetter', g: 'n', q: '{W} ärgerst du dich?' },
+  { v: 'sprechen über', prep: 'über', c: 'akk', en: 'to talk about', s: 'Wir sprechen {PA} {N}.', n: 'Problem', g: 'n', q: '{W} sprecht ihr?' },
+  { v: 'nachdenken über', prep: 'über', c: 'akk', en: 'to think about', s: 'Ich denke {PA} {N} nach.', n: 'Frage', g: 'f', q: '{W} denkst du nach?' },
+  { v: 'sich bedanken für', prep: 'für', c: 'akk', en: 'to say thank you for', s: 'Ich bedanke mich {PA} {N}.', n: 'Geschenk', g: 'n', q: '{W} bedankst du dich?' },
+  { v: 'sich vorbereiten auf', prep: 'auf', c: 'akk', en: 'to prepare for', s: 'Ich bereite mich {PA} {N} vor.', n: 'Prüfung', g: 'f', q: '{W} bereitest du dich vor?' },
+  { v: 'sich konzentrieren auf', prep: 'auf', c: 'akk', en: 'to concentrate on', s: 'Ich konzentriere mich {PA} {N}.', n: 'Arbeit', g: 'f', q: '{W} konzentrierst du dich?' },
+  { v: 'sich gewöhnen an', prep: 'an', c: 'akk', en: 'to get used to', s: 'Ich gewöhne mich {PA} {N}.', n: 'Wetter', g: 'n', q: '{W} gewöhnst du dich?' },
+  { v: 'glauben an', prep: 'an', c: 'akk', en: 'to believe in', s: 'Ich glaube {PA} {N}.', n: 'Zukunft', g: 'f', q: '{W} glaubst du?' },
+  { v: 'bitten um', prep: 'um', c: 'akk', en: 'to ask for', s: 'Ich bitte {PA} {N}.', n: 'Rechnung', g: 'f', q: '{W} bittest du?' },
+  { v: 'aufpassen auf', prep: 'auf', c: 'akk', en: 'to look after', s: 'Ich passe {PA} {N} auf.', n: 'Hund', g: 'm', person: true, q: '{W} passt du auf?' },
+  { v: 'lachen über', prep: 'über', c: 'akk', en: 'to laugh about', s: 'Wir lachen {PA} {N}.', n: 'Witz', g: 'm', q: '{W} lacht ihr?' },
+  { v: 'sich entschuldigen für', prep: 'für', c: 'akk', en: 'to apologise for', s: 'Ich entschuldige mich {PA} {N}.', n: 'Fehler', g: 'm', q: '{W} entschuldigst du dich?' },
+  { v: 'sich Sorgen machen um', prep: 'um', c: 'akk', en: 'to worry about', s: 'Ich mache mir Sorgen {PA} {N}.', n: 'Zukunft', g: 'f', q: '{W} machst du dir Sorgen?' },
+  { v: 'sich verlassen auf', prep: 'auf', c: 'akk', en: 'to rely on', s: 'Ich verlasse mich {PA} {N}.', n: 'Freund', g: 'm', person: true, q: '{W} verlässt du dich?' },
+
+  { v: 'Angst haben vor', prep: 'vor', c: 'dat', en: 'to be afraid of', s: 'Ich habe Angst {PA} {N}.', n: 'Hund', g: 'm', person: true, q: '{W} hast du Angst?' },
+  { v: 'Angst haben vor', prep: 'vor', c: 'dat', en: 'to be afraid of', s: 'Ich habe Angst {PA} {N}.', n: 'Prüfung', g: 'f', q: '{W} hast du Angst?' },
+  { v: 'träumen von', prep: 'von', c: 'dat', en: 'to dream of', s: 'Ich träume {PA} {N}.', n: 'Urlaub', g: 'm', q: '{W} träumst du?' },
+  { v: 'sprechen mit', prep: 'mit', c: 'dat', en: 'to talk to', s: 'Ich spreche {PA} {N}.', n: 'Lehrer', g: 'm', person: true, q: '{W} sprichst du?' },
+  { v: 'telefonieren mit', prep: 'mit', c: 'dat', en: 'to be on the phone with', s: 'Ich telefoniere {PA} {N}.', n: 'Oma', g: 'f', person: true, q: '{W} telefonierst du?' },
+  { v: 'teilnehmen an', prep: 'an', c: 'dat', en: 'to take part in', s: 'Ich nehme {PA} {N} teil.', n: 'Kurs', g: 'm', q: '{W} nimmst du teil?' },
+  { v: 'fragen nach', prep: 'nach', c: 'dat', en: 'to ask about / for', s: 'Ich frage {PA} {N}.', n: 'Weg', g: 'm', q: '{W} fragst du?' },
+  { v: 'suchen nach', prep: 'nach', c: 'dat', en: 'to look for', s: 'Ich suche {PA} {N}.', n: 'Schlüssel', g: 'm', q: '{W} suchst du?' },
+  { v: 'gratulieren zu', prep: 'zu', c: 'dat', en: 'to congratulate on', s: 'Ich gratuliere dir {PA} {N}.', n: 'Geburtstag', g: 'm', q: '{W} gratulierst du mir?' },
+  { v: 'einladen zu', prep: 'zu', c: 'dat', en: 'to invite to', s: 'Ich lade dich {PA} {N} ein.', n: 'Party', g: 'f', q: '{W} lädst du mich ein?' },
+  { v: 'sich verabschieden von', prep: 'von', c: 'dat', en: 'to say goodbye to', s: 'Ich verabschiede mich {PA} {N}.', n: 'Chef', g: 'm', person: true, q: '{W} verabschiedest du dich?' },
+  { v: 'abhängen von', prep: 'von', c: 'dat', en: 'to depend on', s: 'Das hängt {PA} {N} ab.', n: 'Wetter', g: 'n', q: '{W} hängt das ab?' },
+  { v: 'warnen vor', prep: 'vor', c: 'dat', en: 'to warn about', s: 'Ich warne dich {PA} {N}.', n: 'Gefahr', g: 'f', q: '{W} warnst du mich?' },
+  { v: 'sich beschäftigen mit', prep: 'mit', c: 'dat', en: 'to deal with', s: 'Ich beschäftige mich {PA} {N}.', n: 'Thema', g: 'n', q: '{W} beschäftigst du dich?' },
+  { v: 'helfen bei', prep: 'bei', c: 'dat', en: 'to help with', s: 'Ich helfe dir {PA} {N}.', n: 'Arbeit', g: 'f', q: '{W} hilfst du mir?' },
+  { v: 'anfangen mit', prep: 'mit', c: 'dat', en: 'to start with', s: 'Ich fange {PA} {N} an.', n: 'Arbeit', g: 'f', q: '{W} fängst du an?' },
+  { v: 'aufhören mit', prep: 'mit', c: 'dat', en: 'to stop (doing)', s: 'Ich höre {PA} {N} auf.', n: 'Rauchen', g: 'n', q: '{W} hörst du auf?' },
+  { v: 'erzählen von', prep: 'von', c: 'dat', en: 'to tell about', s: 'Ich erzähle {PA} {N}.', n: 'Reise', g: 'f', q: '{W} erzählst du?' },
+  { v: 'sich treffen mit', prep: 'mit', c: 'dat', en: 'to meet (up) with', s: 'Ich treffe mich {PA} {N}.', n: 'Kollegin', g: 'f', person: true, q: '{W} triffst du dich?' },
+];
+
+const VP_PREPS = ['an', 'auf', 'über', 'für', 'um', 'mit', 'von', 'vor', 'zu', 'nach', 'bei', 'in'];
