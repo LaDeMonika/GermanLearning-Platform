@@ -346,3 +346,82 @@ const ADJ_NONE_TEMPLATES = [
 ];
 
 const ADJ_ARTICLE_STEMS = ['ein', 'kein', 'mein', 'dein', 'sein', 'ihr', 'unser', 'euer'];
+
+/* ---------- Reflexive pronouns ---------- */
+
+// Only er/sie/es, sie (pl.) and Sie get a new word: sich (always lowercase)
+const REFL = {
+  ich: { akk: 'mich', dat: 'mir' },
+  du: { akk: 'dich', dat: 'dir' },
+  er: { akk: 'sich', dat: 'sich' },
+  sie: { akk: 'sich', dat: 'sich' },
+  es: { akk: 'sich', dat: 'sich' },
+  wir: { akk: 'uns', dat: 'uns' },
+  ihr: { akk: 'euch', dat: 'euch' },
+  siePl: { akk: 'sich', dat: 'sich' },
+  Sie: { akk: 'sich', dat: 'sich' },
+};
+
+// Present tense in the order ich, du, er/sie/es, wir, ihr, sie/Sie
+const CONJ_INDEX = { ich: 0, du: 1, er: 2, sie: 2, es: 2, wir: 3, ihr: 4, siePl: 5, Sie: 5 };
+const V = {
+  waschen: ['wasche', 'wäschst', 'wäscht', 'waschen', 'wascht', 'waschen'],
+  freuen: ['freue', 'freust', 'freut', 'freuen', 'freut', 'freuen'],
+  beeilen: ['beeile', 'beeilst', 'beeilt', 'beeilen', 'beeilt', 'beeilen'],
+  interessieren: ['interessiere', 'interessierst', 'interessiert', 'interessieren', 'interessiert', 'interessieren'],
+  erinnern: ['erinnere', 'erinnerst', 'erinnert', 'erinnern', 'erinnert', 'erinnern'],
+  ruhen: ['ruhe', 'ruhst', 'ruht', 'ruhen', 'ruht', 'ruhen'],
+  setzen: ['setze', 'setzt', 'setzt', 'setzen', 'setzt', 'setzen'],
+  ziehen: ['ziehe', 'ziehst', 'zieht', 'ziehen', 'zieht', 'ziehen'],
+  stellen: ['stelle', 'stellst', 'stellt', 'stellen', 'stellt', 'stellen'],
+  putzen: ['putze', 'putzt', 'putzt', 'putzen', 'putzt', 'putzen'],
+  kaufen: ['kaufe', 'kaufst', 'kauft', 'kaufen', 'kauft', 'kaufen'],
+  sehen: ['sehe', 'siehst', 'sieht', 'sehen', 'seht', 'sehen'],
+  wuenschen: ['wünsche', 'wünschst', 'wünscht', 'wünschen', 'wünscht', 'wünschen'],
+  merken: ['merke', 'merkst', 'merkt', 'merken', 'merkt', 'merken'],
+  machen: ['mache', 'machst', 'macht', 'machen', 'macht', 'machen'],
+  verspaeten: ['verspäte', 'verspätest', 'verspätet', 'verspäten', 'verspätet', 'verspäten'],
+  aergern: ['ärgere', 'ärgerst', 'ärgert', 'ärgern', 'ärgert', 'ärgern'],
+  kuemmern: ['kümmere', 'kümmerst', 'kümmert', 'kümmern', 'kümmert', 'kümmern'],
+  kaemmen: ['kämme', 'kämmst', 'kämmt', 'kämmen', 'kämmt', 'kämmen'],
+};
+
+// Verbs that are (almost) always reflexive. {S} subject, {V} verb, {R} reflexive blank.
+// c = case of the reflexive pronoun: dat when there is already an Akkusativ object.
+const REFL_VERBS = [
+  { inf: 'sich freuen auf', c: 'akk', v: V.freuen, s: '{S} {V} {R} auf das Wochenende.', en: 'to look forward to' },
+  { inf: 'sich beeilen', c: 'akk', v: V.beeilen, s: '{S} {V} {R}.', en: 'to hurry' },
+  { inf: 'sich interessieren für', c: 'akk', v: V.interessieren, s: '{S} {V} {R} für Musik.', en: 'to be interested in' },
+  { inf: 'sich erinnern an', c: 'akk', v: V.erinnern, s: '{S} {V} {R} an den Urlaub.', en: 'to remember' },
+  { inf: 'sich ausruhen', c: 'akk', v: V.ruhen, s: '{S} {V} {R} am Wochenende aus.', en: 'to rest' },
+  { inf: 'sich setzen', c: 'akk', v: V.setzen, s: '{S} {V} {R} auf das Sofa.', en: 'to sit down' },
+  { inf: 'sich anziehen', c: 'akk', v: V.ziehen, s: '{S} {V} {R} schnell an.', en: 'to get dressed' },
+  { inf: 'sich vorstellen', c: 'akk', v: V.stellen, s: '{S} {V} {R} kurz vor.', en: 'to introduce oneself' },
+  { inf: 'sich waschen', c: 'akk', v: V.waschen, s: '{S} {V} {R} jeden Morgen.', en: 'to wash (oneself)' },
+  { inf: 'sich verspäten', c: 'akk', v: V.verspaeten, s: '{S} {V} {R} heute.', en: 'to be late' },
+  { inf: 'sich ärgern über', c: 'akk', v: V.aergern, s: '{S} {V} {R} über den Regen.', en: 'to be annoyed about' },
+  { inf: 'sich kümmern um', c: 'akk', v: V.kuemmern, s: '{S} {V} {R} um den Hund.', en: 'to take care of' },
+  { inf: 'sich (Dat) etwas vorstellen', c: 'dat', v: V.stellen, s: '{S} {V} {R} das Leben in Berlin vor.', en: 'to imagine something', obj: 'das Leben in Berlin' },
+  { inf: 'sich (Dat) die Hände waschen', c: 'dat', v: V.waschen, s: '{S} {V} {R} die Hände.', en: 'to wash one’s hands', obj: 'die Hände' },
+  { inf: 'sich (Dat) die Zähne putzen', c: 'dat', v: V.putzen, s: '{S} {V} {R} die Zähne.', en: 'to brush one’s teeth', obj: 'die Zähne' },
+  { inf: 'sich (Dat) etwas kaufen', c: 'dat', v: V.kaufen, s: '{S} {V} {R} ein Eis.', en: 'to buy oneself something', obj: 'ein Eis' },
+  { inf: 'sich (Dat) etwas ansehen', c: 'dat', v: V.sehen, s: '{S} {V} {R} den Film an.', en: 'to watch something', obj: 'den Film' },
+  { inf: 'sich (Dat) etwas wünschen', c: 'dat', v: V.wuenschen, s: '{S} {V} {R} einen Hund.', en: 'to wish for something', obj: 'einen Hund' },
+  { inf: 'sich (Dat) etwas merken', c: 'dat', v: V.merken, s: '{S} {V} {R} das Wort.', en: 'to memorise something', obj: 'das Wort' },
+  { inf: 'sich (Dat) Sorgen machen', c: 'dat', v: V.machen, s: '{S} {V} {R} Sorgen.', en: 'to worry', obj: 'Sorgen' },
+];
+
+// Verbs that work on yourself OR on someone else: "Er wäscht sich" vs "Er wäscht ihn"
+const MIRROR_VERBS = [
+  { c: 'akk', v: V.waschen, s: '{S} {V} {R}.', en: 'washes', pic: '🧼' },
+  { c: 'akk', v: V.ziehen, s: '{S} {V} {R} an.', en: 'dresses', pic: '👕' },
+  { c: 'akk', v: V.stellen, s: '{S} {V} {R} vor.', en: 'introduces', pic: '🤝' },
+  { c: 'akk', v: V.kaemmen, s: '{S} {V} {R}.', en: 'combs the hair of', pic: '🪮' },
+  { c: 'akk', v: V.sehen, s: '{S} {V} {R} im Spiegel.', en: 'sees in the mirror', pic: '🪞' },
+  { c: 'dat', v: V.kaufen, s: '{S} {V} {R} ein Eis.', en: 'buys an ice cream for', pic: '🍦', obj: 'ein Eis' },
+  { c: 'dat', v: V.machen, s: '{S} {V} {R} einen Kaffee.', en: 'makes a coffee for', pic: '☕', obj: 'einen Kaffee' },
+  { c: 'dat', v: V.waschen, s: '{S} {V} {R} die Hände.', en: 'washes the hands of', pic: '🧼', obj: 'die Hände' },
+];
+
+// Groups, so "Tom & Lisa" and "Tom" never act on each other
+const GROUP_MEMBERS = { us: ['me', 'tom'], tomlisa: ['tom', 'lisa'], annaben: ['anna', 'ben'] };

@@ -84,7 +84,7 @@ function possTable(stem, hiGender, withNouns) {
 
 /* ---------- Routing ---------- */
 
-const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, tables: renderTables, practice: renderPractice };
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, tables: renderTables, practice: renderPractice };
 function route() {
   const r = location.hash.slice(1).split('/')[0] || 'cases';
   const key = ROUTES[r] ? r : 'cases';
@@ -436,6 +436,144 @@ function drawBuilder() {
 }
 
 /* =========================================================
+   REFLEXIVE
+   ========================================================= */
+
+const REFL_EN = { ich: 'myself', du: 'yourself', er: 'himself', sie: 'herself', es: 'itself', wir: 'ourselves', ihr: 'yourselves', siePl: 'themselves', Sie: 'yourself (formal)' };
+const members = id => GROUP_MEMBERS[id] || [id];
+const overlaps = (a, b) => members(a).some(m => members(b).includes(m));
+
+function reflSentence(verb, key, r) {
+  return verb.s.replace('{S}', cap(PRONOUNS[key].nom)).replace('{V}', verb.v[CONJ_INDEX[key]]).replace('{R}', r);
+}
+
+function reflCaseReason(verb) {
+  return verb.c === 'dat'
+    ? `There is already an Akkusativ object (<i>${verb.obj}</i>), so the person goes in Dativ.`
+    : 'There is no other Akkusativ object, so the person goes in Akkusativ.';
+}
+
+const sichNote = w => w === 'sich' ? ' <small>(sich is always lowercase, even for formal Sie)</small>' : '';
+
+// "Tom wäscht sich" (same person) vs "Tom wäscht ihn" (someone else)
+function mirrorAnswer(verb, doer, recv, L) {
+  return doer === recv ? REFL[pronKey(doer, L)][verb.c] : PRONOUNS[pronKey(recv, L)][verb.c];
+}
+
+function mirrorPic(verb, doer, recv) {
+  const self = doer === recv;
+  return `<div class="mirror">${personLabel(doer)} <span class="arr">${verb.pic} ${self ? '↩︎' : '➜'}</span> ${self ? '<span class="muted">the same person</span>' : personLabel(recv)}</div>`;
+}
+
+function mirrorExplain(verb, doer, recv, L, word) {
+  const kd = pronKey(doer, L);
+  const self = doer === recv;
+  return `<ol>
+    <li><b>Who does it?</b> ${personLabel(doer)}: ${relation(doer, L)} → <b>${PRONOUNS[kd].label}</b></li>
+    <li><b>Who gets it?</b> ${self
+      ? 'the same person → <b>reflexive pronoun</b>'
+      : `${personLabel(recv)}, someone else (${relation(recv, L)}) → normal pronoun <b>${PRONOUNS[pronKey(recv, L)].label}</b>`}</li>
+    <li><b>Case:</b> ${reflCaseReason(verb)} → ${tag(verb.c)}</li>
+    <li>→ ${hl(verb.c, word)}${self ? sichNote(word) : ''}</li>
+  </ol>`;
+}
+
+function reflTable() {
+  return `<div class="tw"><table><thead><tr><th>Person</th><th class="col-akk">reflexive Akk</th><th class="col-dat">reflexive Dat</th><th>normal Akk</th><th>normal Dat</th></tr></thead><tbody>
+    ${PRONOUN_KEYS.map(k => `<tr><th>${PRONOUNS[k].label}<span class="sub">${REFL_EN[k]}</span></th>
+      <td class="f c-akk ${REFL[k].akk !== PRONOUNS[k].akk ? 'hlcol' : ''}">${REFL[k].akk}</td>
+      <td class="f c-dat ${REFL[k].dat !== PRONOUNS[k].dat ? 'hlcol' : ''}">${REFL[k].dat}</td>
+      <td class="muted">${PRONOUNS[k].akk}</td><td class="muted">${PRONOUNS[k].dat}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+const reflB = { listener: 'anna', doer: 'tom', recv: 'tom', verb: 0 };
+
+function renderReflexive() {
+  const isPrep = v => / (auf|für|an|über|um)$/.test(v.inf);
+  const verbList = list => `<ul class="vlist">${list.map(v => `<li><b>${v.inf}</b> <small>${v.en}</small></li>`).join('')}</ul>`;
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Reflexive pronouns: myself, yourself, himself …</h2>
+    <p class="lead">When the action goes <b>back to the person doing it</b>, German uses a reflexive pronoun. For <b>ich, du, wir, ihr</b> it is just the normal pronoun. Only the 3rd person and formal Sie get a new word: <b>sich</b>.</p>
+    <div class="mirror-pair">
+      <div class="mp"><div class="mpic">🧑 ↩︎</div><div class="sentence">Tom wäscht <b class="c-akk">sich</b>.</div><small>Tom washes himself: same person → reflexive</small></div>
+      <div class="mp"><div class="mpic">🧑 ➜ 👶</div><div class="sentence">Tom wäscht <b class="c-akk">es</b>.</div><small>Tom washes the baby: someone else → normal pronoun</small></div>
+    </div>
+    <h4>All forms <small>(highlighted: where reflexive differs from the normal pronoun)</small></h4>
+    ${reflTable()}
+  </section>
+
+  <section class="card">
+    <h2>Akkusativ or Dativ?</h2>
+    <div class="wowohin">
+      <div class="ww akk"><div class="big c-akk">One object → Akkusativ</div><p>The person is the only thing the action hits.<br><b>Ich wasche <span class="c-akk">mich</span>.</b><br><b>Du ziehst <span class="c-akk">dich</span> an.</b></p></div>
+      <div class="ww dat"><div class="big c-dat">+ a thing → Dativ</div><p>A thing already takes the Akkusativ, so the person moves to Dativ.<br><b>Ich wasche <span class="c-dat">mir</span> die Hände.</b><br><b>Du ziehst <span class="c-dat">dir</span> die Jacke an.</b></p></div>
+    </div>
+    <p class="muted" style="margin-top:12px">Only <b>ich</b> and <b>du</b> show the difference (mich/mir, dich/dir). All other persons look the same in both cases.</p>
+  </section>
+
+  <section class="card">
+    <h2>Mirror tool: myself or someone else?</h2>
+    <p class="muted">Pick who does it and who gets it. Same person → reflexive. Someone else → normal pronoun, from your point of view.</p>
+    <div id="mirrorTool"></div>
+  </section>
+
+  <section class="card">
+    <h2>Common reflexive verbs</h2>
+    <div class="bgrid">
+      <div><h4>Akkusativ</h4>${verbList(REFL_VERBS.filter(v => v.c === 'akk' && !isPrep(v)))}</div>
+      <div><h4>Akkusativ + preposition</h4>${verbList(REFL_VERBS.filter(v => v.c === 'akk' && isPrep(v)))}</div>
+      <div><h4>Dativ (+ a thing in Akk)</h4>${verbList(REFL_VERBS.filter(v => v.c === 'dat'))}</div>
+    </div>
+    <div class="tips">
+      <div class="tip"><b>sich is never capitalised</b><i>Setzen Sie <u>sich</u>!</i> Even with formal Sie, it stays lowercase.</div>
+      <div class="tip"><b>Word order</b>The reflexive comes right after the verb or subject: <i>Freust du dich? · Ich habe mich gefreut.</i></div>
+      <div class="tip"><b>Commands</b><i>Beeil dich! · Beeilt euch! · Beeilen Sie sich!</i></div>
+      <div class="tip"><b>Perfect tense uses haben</b><i>Ich habe mich gewaschen.</i> (not bin)</div>
+    </div>
+  </section>`;
+
+  drawMirror();
+}
+
+function drawMirror() {
+  const B = reflB;
+  const L = B.listener;
+  const pool = poolFor(L);
+  if (!pool.includes(B.doer)) B.doer = L;
+  if (!pool.includes(B.recv) || (B.recv !== B.doer && overlaps(B.recv, B.doer))) B.recv = B.doer;
+  const verb = MIRROR_VERBS[B.verb];
+  const kd = pronKey(B.doer, L);
+  const word = mirrorAnswer(verb, B.doer, B.recv, L);
+
+  const chips = (key, list) => `<div class="chips">${list.map(([v, l, dis]) => `<button class="chipbtn ${String(B[key]) === String(v) ? 'on' : ''}" data-k="${key}" data-v="${v}" ${dis ? 'disabled' : ''}>${l}</button>`).join('')}</div>`;
+
+  $('#mirrorTool').innerHTML = `
+    <div class="ctl-row"><span>You are talking to</span>
+      <div class="seg" id="mseg">${Object.keys(LISTENERS).map(k => `<button data-l="${k}" class="${k === L ? 'on' : ''}">${LISTENERS[k].label}</button>`).join('')}</div>
+    </div>
+    <div class="bgrid">
+      <div><h4>Who does it?</h4>${chips('doer', pool.map(p => [p, personLabel(p)]))}</div>
+      <div><h4>Who gets it?</h4>${chips('recv', pool.map(p => [p, personLabel(p), p !== B.doer && overlaps(p, B.doer)]))}</div>
+      <div><h4>Action</h4>${chips('verb', MIRROR_VERBS.map((v, i) => [i, `${v.pic} ${v.en}`]))}</div>
+    </div>
+    ${mirrorPic(verb, B.doer, B.recv)}
+    <div class="build-out">${reflSentence(verb, kd, hl(verb.c, word))}</div>
+    <div class="explain">${mirrorExplain(verb, B.doer, B.recv, L, word)}</div>`;
+
+  $$('#mirrorTool [data-k]').forEach(b => b.addEventListener('click', () => {
+    B[b.dataset.k] = b.dataset.k === 'verb' ? +b.dataset.v : b.dataset.v;
+    drawMirror();
+  }));
+  $('#mseg').addEventListener('click', e => {
+    const b = e.target.closest('[data-l]');
+    if (b) { B.listener = b.dataset.l; drawMirror(); }
+  });
+}
+
+/* =========================================================
    TABLES
    ========================================================= */
 
@@ -451,7 +589,7 @@ function renderTables() {
   app.innerHTML = `
   <section class="card">
     <h2>Tables</h2>
-    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a></div>
+    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a></div>
   </section>
 
   <section class="card" id="t-art">
@@ -508,6 +646,12 @@ function renderTables() {
     <h2>Adjective endings</h2>
     ${adjLegend}
     ${ADJ_TYPE_KEYS.map(t => `<h4>${ADJ_TYPES[t].name} <small>(${ADJ_TYPES[t].also})</small></h4>${adjTable(t)}`).join('')}
+  </section>
+
+  <section class="card" id="t-refl">
+    <h2>Reflexive pronouns</h2>
+    <p class="muted">Highlighted: where the reflexive differs from the normal pronoun. Dativ is used when there is already a thing in Akkusativ (<i>Ich wasche mir die Hände</i>).</p>
+    ${reflTable()}
   </section>`;
 
   drawPossBody();
@@ -557,6 +701,7 @@ const MODES = {
   pron: { title: '👤 Pronouns', d: 'ich / mich / mir … in sentences.' },
   poss: { title: '🎁 Whose is it?', d: 'mein / sein / ihr … with the right ending.' },
   adj: { title: '✨ Adjective endings', d: 'der alte · ein alter · alter …' },
+  refl: { title: '🪞 Reflexive', d: 'mich / mir / sich: myself or someone else?' },
   mix: { title: '🔀 Mix', d: 'All of the above.' },
 };
 
@@ -761,6 +906,55 @@ const GEN = {
       </ol><div class="full">${fill(hl(c, answer))}</div>`,
     };
   },
+
+  refl() {
+    const L = rnd(Object.keys(LISTENERS));
+    const pool = poolFor(L);
+    const blank = '<span class="blank">___</span>';
+    const reflOptions = (answer, keys, c) => {
+      if (typeMode()) return null;
+      const near = [answer, 'sich', ...keys.flatMap(k => [REFL[k].akk, REFL[k].dat, PRONOUNS[k].akk, PRONOUNS[k].dat])];
+      const extra = shuffle(PRONOUN_KEYS).flatMap(k => [REFL[k][c], PRONOUNS[k][c]]);
+      return shuffle(uniq([...near, ...extra]).slice(0, 6)).map(v => ({ v, l: v }));
+    };
+
+    // Half the time: an always-reflexive verb
+    if (Math.random() < 0.5) {
+      const verb = rnd(REFL_VERBS);
+      const pid = rnd(pool);
+      const key = pronKey(pid, L);
+      const answer = REFL[key][verb.c];
+      return {
+        caseKey: verb.c,
+        scene: sceneHtml(L, pid === 'me' ? null : pid, pool),
+        hint: `<b>${verb.inf}</b> <small>(${verb.en})</small> · done by ${personLabel(pid)}`,
+        sentence: reflSentence(verb, key, blank),
+        steps: [{ ask: 'Fill in the reflexive pronoun.', options: reflOptions(answer, [key], verb.c), answer }],
+        explain: `<ol>
+          <li><b>Who does it?</b> ${personLabel(pid)}: ${relation(pid, L)} → <b>${PRONOUNS[key].label}</b></li>
+          <li><b>Verb:</b> ${verb.inf} is reflexive: the action goes back to the same person.</li>
+          <li><b>Case:</b> ${reflCaseReason(verb)} → ${tag(verb.c)}</li>
+          <li><b>${PRONOUNS[key].label}</b> → ${hl(verb.c, answer)}${sichNote(answer)}</li>
+        </ol><div class="full">${reflSentence(verb, key, hl(verb.c, answer))}</div>`,
+      };
+    }
+
+    // Otherwise: myself or someone else?
+    const verb = rnd(MIRROR_VERBS);
+    const doer = rnd(pool);
+    const others = pool.filter(p => !overlaps(p, doer));
+    const recv = Math.random() < 0.5 || !others.length ? doer : rnd(others);
+    const kd = pronKey(doer, L);
+    const answer = mirrorAnswer(verb, doer, recv, L);
+    return {
+      caseKey: verb.c,
+      scene: sceneHtml(L, recv === 'me' ? null : recv, pool),
+      hint: mirrorPic(verb, doer, recv),
+      sentence: reflSentence(verb, kd, blank),
+      steps: [{ ask: 'Myself or someone else? Fill in the pronoun.', options: reflOptions(answer, uniq([kd, pronKey(recv, L)]), verb.c), answer }],
+      explain: `${mirrorExplain(verb, doer, recv, L, answer)}<div class="full">${reflSentence(verb, kd, hl(verb.c, answer))}</div>`,
+    };
+  },
 };
 
 function renderPractice() {
@@ -800,7 +994,7 @@ function renderPractice() {
 
 function newExercise() {
   const mode = settings.mode === 'mix'
-    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj'])
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl'])
     : settings.mode;
   cur = { mode, ex: GEN[mode](), step: 0, results: [] };
   drawEx();

@@ -258,6 +258,18 @@ mark.tgt.dat { background: var(--dat-bg); color: var(--dat); } mark.tgt.gen { ba
 .build-out.c-nom .end { color: var(--nom); } .build-out.c-akk .end { color: var(--akk); }
 .build-out.c-dat .end { color: var(--dat); } .build-out.c-gen .end { color: var(--gen); }
 
+/* ---------- Reflexive ---------- */
+.mirror-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 14px 0; }
+.mp { background: var(--surface-2); border-radius: 12px; padding: 14px 16px; }
+.mp .mpic { font-size: 2rem; }
+.mp .sentence { margin: 4px 0; }
+.mirror { font-size: 1.2rem; font-weight: 600; margin: 10px 0; }
+.mirror .arr { display: inline-block; padding: 0 8px; color: var(--accent); }
+.vlist { list-style: none; padding: 0; margin: 6px 0; }
+.vlist li { padding: 4px 0; border-bottom: 1px solid var(--border); }
+.vlist small { color: var(--muted); display: block; }
+.chipbtn:disabled { opacity: .35; cursor: not-allowed; }
+
 @media (max-width: 600px) {
   .sigrow { grid-template-columns: 1fr; }
   .build-out { font-size: 1.5rem; }
