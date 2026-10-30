@@ -820,3 +820,171 @@ const PERFEKT_VERBS = [
   { inf: 'sich freuen', en: 'to be happy', pp: 'gefreut', aux: 'h', type: 'weak', why: 'refl', refl: true, s: '{S} {AUX} {R} sehr {PP}.' },
   { inf: 'sich waschen', en: 'to wash (oneself)', pp: 'gewaschen', aux: 'h', type: 'strong', why: 'refl', refl: true, s: '{S} {AUX} {R} schnell {PP}.' },
 ];
+
+/* ---------- Word order ---------- */
+
+// One clause, many shapes. forms: present tense (ich, du, er, wir, ihr, sie) of the verb
+// (for separable verbs: without the prefix). rest: object or place, may be empty.
+const WO_CLAUSES = [
+  { inf: 'fahren', forms: ['fahre', 'fährst', 'fährt', 'fahren', 'fahrt', 'fahren'], rest: 'nach Berlin', time: 'morgen', past: 'letzte Woche', pp: 'gefahren', aux: 's' },
+  { inf: 'lernen', forms: ['lerne', 'lernst', 'lernt', 'lernen', 'lernt', 'lernen'], rest: 'Deutsch', time: 'heute', past: 'gestern', pp: 'gelernt', aux: 'h' },
+  { inf: 'kaufen', forms: V.kaufen, rest: 'ein neues Handy', time: 'morgen', past: 'gestern', pp: 'gekauft', aux: 'h' },
+  { inf: 'kochen', forms: ['koche', 'kochst', 'kocht', 'kochen', 'kocht', 'kochen'], rest: 'Spaghetti', time: 'heute Abend', past: 'gestern', pp: 'gekocht', aux: 'h' },
+  { inf: 'spielen', forms: ['spiele', 'spielst', 'spielt', 'spielen', 'spielt', 'spielen'], rest: 'Fußball', time: 'am Samstag', past: 'am Samstag', pp: 'gespielt', aux: 'h' },
+  { inf: 'arbeiten', forms: ['arbeite', 'arbeitest', 'arbeitet', 'arbeiten', 'arbeitet', 'arbeiten'], rest: 'zu Hause', time: 'morgen', past: 'gestern', pp: 'gearbeitet', aux: 'h' },
+  { inf: 'aufstehen', sep: 'auf', forms: ['stehe', 'stehst', 'steht', 'stehen', 'steht', 'stehen'], rest: '', time: 'morgen früh', past: 'heute früh', pp: 'aufgestanden', aux: 's' },
+  { inf: 'einkaufen', sep: 'ein', forms: V.kaufen, rest: 'im Supermarkt', time: 'heute', past: 'gestern', pp: 'eingekauft', aux: 'h' },
+  { inf: 'anrufen', sep: 'an', forms: ['rufe', 'rufst', 'ruft', 'rufen', 'ruft', 'rufen'], rest: 'die Oma', time: 'heute Abend', past: 'gestern Abend', pp: 'angerufen', aux: 'h' },
+  { inf: 'fernsehen', sep: 'fern', forms: V.sehen, rest: '', time: 'heute Abend', past: 'gestern Abend', pp: 'ferngesehen', aux: 'h' },
+];
+
+// Subjects as written in the sentence + their pronoun key (for the verb form)
+const WO_SUBJECTS = [
+  { w: 'ich', k: 'ich' }, { w: 'du', k: 'du' }, { w: 'Tom', k: 'er' }, { w: 'Lisa', k: 'sie' },
+  { w: 'wir', k: 'wir' }, { w: 'ihr', k: 'ihr' }, { w: 'meine Eltern', k: 'siePl' },
+];
+const WO_SUBJECTS_Q = [{ w: 'du', k: 'du' }, { w: 'ihr', k: 'ihr' }, { w: 'Sie', k: 'Sie' }];
+
+const WO_MODALS = {
+  müssen: ['muss', 'musst', 'muss', 'müssen', 'müsst', 'müssen'],
+  wollen: ['will', 'willst', 'will', 'wollen', 'wollt', 'wollen'],
+  können: ['kann', 'kannst', 'kann', 'können', 'könnt', 'können'],
+};
+
+// Conjunctions that send the verb to the end, with a main clause to hang them on
+const WO_SUB_INTROS = [
+  { c: 'weil', p: 'Ich bin froh,' }, { c: 'dass', p: 'Ich glaube,' }, { c: 'ob', p: 'Ich weiß nicht,' },
+  { c: 'wenn', p: 'Es ist super,' }, { c: 'obwohl', p: 'Das ist gut,' },
+];
+// Position 0: these change nothing
+const WO_ZERO_INTROS = [{ c: 'aber', p: 'Es regnet,' }, { c: 'denn', p: 'Ich bin glücklich,' }, { c: 'und', p: 'Das Wetter ist schön,' }];
+// A whole clause in position 1: the verb comes right after the comma
+const WO_FIRST_INTROS = ['Wenn ich Zeit habe,', 'Weil es so schön ist,', 'Wenn alles klappt,'];
+
+const WO_SUB_CONJ = ['weil', 'dass', 'ob', 'wenn', 'obwohl', 'als', 'bevor', 'nachdem', 'damit', 'während', 'seit', 'bis', 'falls', 'sodass'];
+const WO_ZERO_CONJ = ['und', 'aber', 'oder', 'denn', 'sondern'];
+
+// Connecting adverbs take position 1 themselves: the verb comes right after them
+const WO_ADV_INTROS = [
+  { c: 'deshalb', p: 'Das Wetter ist schlecht,' }, { c: 'deswegen', p: 'Wir haben heute Zeit,' },
+  { c: 'trotzdem', p: 'Es regnet,' }, { c: 'trotzdem', p: 'Ich bin sehr müde,' },
+  { c: 'dann', p: 'Zuerst frühstücken wir,' }, { c: 'danach', p: 'Wir essen zuerst,' },
+  { c: 'außerdem', p: 'Ich habe viel zu tun,' }, { c: 'darum', p: 'Das ist wichtig,' },
+];
+const WO_ADV_CONJ = [
+  ['deshalb / deswegen / darum / daher', 'that’s why, so'], ['trotzdem / dennoch', 'anyway, still'], ['dann / danach', 'then, after that'],
+  ['außerdem', 'besides, also'], ['sonst', 'otherwise'], ['also', 'so, therefore'], ['stattdessen', 'instead'],
+];
+
+// je … desto: [text, role]. The je-part has the verb at the end, the desto-part has it right after desto + comparative.
+const JE_DESTO = [
+  [['je mehr', 'X'], ['ich', 'S'], ['lerne', 'VE'], ['desto besser', 'X'], ['spreche', 'V'], ['ich', 'S'], ['Deutsch', 'X']],
+  [['je länger', 'X'], ['ich', 'S'], ['schlafe', 'VE'], ['desto müder', 'X'], ['bin', 'V'], ['ich', 'S']],
+  [['je öfter', 'X'], ['wir', 'S'], ['üben', 'VE'], ['desto leichter', 'X'], ['wird', 'V'], ['es', 'S']],
+  [['je älter', 'X'], ['mein Opa', 'S'], ['wird', 'VE'], ['desto ruhiger', 'X'], ['ist', 'V'], ['er', 'S']],
+  [['je früher', 'X'], ['du', 'S'], ['aufstehst', 'VE'], ['desto mehr Zeit', 'X'], ['hast', 'V'], ['du', 'S']],
+  [['je schneller', 'X'], ['ihr', 'S'], ['fahrt', 'VE'], ['desto früher', 'X'], ['seid', 'V'], ['ihr', 'S'], ['da', 'X']],
+  [['je mehr Kaffee', 'X'], ['ich', 'S'], ['trinke', 'VE'], ['desto nervöser', 'X'], ['werde', 'V'], ['ich', 'S']],
+  [['je wärmer', 'X'], ['es', 'S'], ['ist', 'VE'], ['desto glücklicher', 'X'], ['sind', 'V'], ['die Leute', 'S']],
+];
+
+// Two-part connectors: fill in the missing half
+const CONNECTOR_PAIRS = [
+  { s: 'Ich trinke weder Kaffee ___ Tee.', a: 'noch', pair: 'weder … noch', en: 'neither … nor' },
+  { s: 'Ich habe ___ Zeit noch Geld.', a: 'weder', pair: 'weder … noch', en: 'neither … nor' },
+  { s: 'Wir fahren entweder ans Meer ___ in die Berge.', a: 'oder', pair: 'entweder … oder', en: 'either … or' },
+  { s: '___ kommst du mit, oder du bleibst hier.', a: 'Entweder', pair: 'entweder … oder', en: 'either … or' },
+  { s: 'Sie spricht sowohl Deutsch ___ Englisch.', a: 'als auch', pair: 'sowohl … als auch', en: 'both … and' },
+  { s: 'Sowohl meine Mutter ___ mein Vater sprechen Englisch.', a: 'als auch', pair: 'sowohl … als auch', en: 'both … and' },
+  { s: 'Er ist nicht nur nett, ___ auch lustig.', a: 'sondern', pair: 'nicht nur … sondern auch', en: 'not only … but also' },
+  { s: 'Das Auto ist zwar alt, ___ es fährt noch gut.', a: 'aber', pair: 'zwar … aber', en: 'admittedly … but' },
+  { s: '___ mehr ich übe, desto besser werde ich.', a: 'Je', pair: 'je … desto', en: 'the more … the more' },
+  { s: 'Je länger der Film ist, ___ müder werde ich.', a: 'desto', pair: 'je … desto', en: 'the more … the more' },
+];
+const CONNECTOR_PAIR_WORDS = ['noch', 'weder', 'oder', 'entweder', 'als auch', 'sondern', 'aber', 'je', 'desto'];
+
+// Same meaning, three word orders: the verb after the gap tells you which connector fits.
+// type: sub = verb to the end, zero = normal order, adv = verb right after the gap
+const CONNECTOR_TYPE = {
+  weil: 'sub', obwohl: 'sub', bevor: 'sub', wenn: 'sub',
+  denn: 'zero', aber: 'zero', und: 'zero', oder: 'zero',
+  deshalb: 'adv', deswegen: 'adv', trotzdem: 'adv', dann: 'adv', sonst: 'adv',
+};
+const CONNECTOR_PICK = [
+  { opts: ['weil', 'denn', 'deshalb'], items: [
+    { s: 'Ich bleibe zu Hause, ___ ich krank bin.', a: 'weil' },
+    { s: 'Ich bleibe zu Hause, ___ ich bin krank.', a: 'denn' },
+    { s: 'Ich bin krank, ___ bleibe ich zu Hause.', a: 'deshalb' },
+  ] },
+  { opts: ['weil', 'denn', 'deswegen'], items: [
+    { s: 'Ich esse einen Apfel, ___ ich Hunger habe.', a: 'weil' },
+    { s: 'Ich esse einen Apfel, ___ ich habe Hunger.', a: 'denn' },
+    { s: 'Ich habe Hunger, ___ esse ich einen Apfel.', a: 'deswegen' },
+  ] },
+  { opts: ['obwohl', 'aber', 'trotzdem'], items: [
+    { s: 'Ich gehe spazieren, ___ es regnet.', a: 'obwohl' },
+    { s: 'Es regnet, ___ ich gehe spazieren.', a: 'aber' },
+    { s: 'Es regnet, ___ gehe ich spazieren.', a: 'trotzdem' },
+  ] },
+  { opts: ['obwohl', 'aber', 'trotzdem'], items: [
+    { s: 'Sie lernt weiter, ___ sie müde ist.', a: 'obwohl' },
+    { s: 'Sie ist müde, ___ sie lernt weiter.', a: 'aber' },
+    { s: 'Sie ist müde, ___ lernt sie weiter.', a: 'trotzdem' },
+  ] },
+  { opts: ['bevor', 'und', 'dann'], items: [
+    { s: 'Ich frühstücke, ___ ich zur Arbeit gehe.', a: 'bevor' },
+    { s: 'Ich frühstücke, ___ ich gehe zur Arbeit.', a: 'und' },
+    { s: 'Ich frühstücke, ___ gehe ich zur Arbeit.', a: 'dann' },
+  ] },
+  { opts: ['wenn', 'oder', 'sonst'], items: [
+    { s: 'Wir verpassen den Zug, ___ wir uns nicht beeilen.', a: 'wenn' },
+    { s: 'Wir müssen uns beeilen, ___ wir verpassen den Zug.', a: 'oder' },
+    { s: 'Wir müssen uns beeilen, ___ verpassen wir den Zug.', a: 'sonst' },
+  ] },
+];
+
+/* ---------- Präteritum ---------- */
+
+// ich/er form of every verb in the Perfekt list.
+// Type: w = regular (-te), s = irregular (vowel change), m = mixed (vowel change + -te), aux = sein/werden.
+// Group for irregular verbs = the new vowel.
+const PRAET_FORMS = {
+  machen: ['machte', 'w'], kaufen: ['kaufte', 'w'], spielen: ['spielte', 'w'], lernen: ['lernte', 'w'],
+  kochen: ['kochte', 'w'], arbeiten: ['arbeitete', 'w'], warten: ['wartete', 'w'], wohnen: ['wohnte', 'w'],
+  hören: ['hörte', 'w'], tanzen: ['tanzte', 'w'], reisen: ['reiste', 'w'], wandern: ['wanderte', 'w'],
+  aufwachen: ['wachte', 'w'], einkaufen: ['kaufte', 'w'], aufräumen: ['räumte', 'w'], besuchen: ['besuchte', 'w'],
+  erzählen: ['erzählte', 'w'], bezahlen: ['bezahlte', 'w'], studieren: ['studierte', 'w'], telefonieren: ['telefonierte', 'w'],
+  fotografieren: ['fotografierte', 'w'], reparieren: ['reparierte', 'w'], 'sich freuen': ['freute', 'w'],
+  bringen: ['brachte', 'm'], denken: ['dachte', 'm'], wissen: ['wusste', 'm'], kennen: ['kannte', 'm'], mitbringen: ['brachte', 'm'],
+  sehen: ['sah', 's', 'a'], essen: ['aß', 's', 'a'], trinken: ['trank', 's', 'a'], lesen: ['las', 's', 'a'],
+  finden: ['fand', 's', 'a'], sprechen: ['sprach', 's', 'a'], nehmen: ['nahm', 's', 'a'], helfen: ['half', 's', 'a'],
+  singen: ['sang', 's', 'a'], treffen: ['traf', 's', 'a'], kommen: ['kam', 's', 'a'], schwimmen: ['schwamm', 's', 'a'],
+  bekommen: ['bekam', 's', 'a'], verstehen: ['verstand', 's', 'a'], vergessen: ['vergaß', 's', 'a'], aufstehen: ['stand', 's', 'a'],
+  fernsehen: ['sah', 's', 'a'],
+  schreiben: ['schrieb', 's', 'ie'], bleiben: ['blieb', 's', 'ie'], schlafen: ['schlief', 's', 'ie'], laufen: ['lief', 's', 'ie'],
+  einschlafen: ['schlief', 's', 'ie'], anrufen: ['rief', 's', 'ie'],
+  fahren: ['fuhr', 's', 'u'], 'sich waschen': ['wusch', 's', 'u'],
+  fliegen: ['flog', 's', 'o'],
+  gehen: ['ging', 's', 'special'],
+  sein: ['war', 'aux'], werden: ['wurde', 'aux'],
+};
+
+// The ones you also use when speaking, with their own sentences
+const PRAET_EXTRA = [
+  { inf: 'haben', en: 'to have', p: 'hatte', t: 'aux', s: '{S} {V} keine Zeit.' },
+  { inf: 'können', en: 'can, to be able to', p: 'konnte', t: 'mod', s: '{S} {V} gut schwimmen.' },
+  { inf: 'müssen', en: 'must, to have to', p: 'musste', t: 'mod', s: '{S} {V} früh aufstehen.' },
+  { inf: 'wollen', en: 'to want', p: 'wollte', t: 'mod', s: '{S} {V} nach Paris fahren.' },
+  { inf: 'dürfen', en: 'may, to be allowed to', p: 'durfte', t: 'mod', s: '{S} {V} lange aufbleiben.' },
+  { inf: 'sollen', en: 'should, to be supposed to', p: 'sollte', t: 'mod', s: '{S} {V} mehr lernen.' },
+  { inf: 'mögen', en: 'to like', p: 'mochte', t: 'mod', s: '{S} {V} keinen Kaffee.' },
+];
+
+const PRAET_TYPES = {
+  w: { label: 'regular', rule: 'stem + -te + ending (-ete after t/d): machen → machte, arbeiten → arbeitete' },
+  s: { label: 'irregular', rule: 'the vowel changes and there is no -te: gehen → ging, sehen → sah' },
+  m: { label: 'mixed', rule: 'the vowel changes AND you add -te: bringen → brachte, denken → dachte' },
+  mod: { label: 'modal verb', rule: 'drop the umlaut, add -te: können → konnte, müssen → musste' },
+  aux: { label: 'sein / haben / werden', rule: 'learn these three by heart: war, hatte, wurde' },
+};
+const PRAET_GROUPS = { a: '→ a', ie: '→ ie', u: '→ u', o: '→ o', special: 'special' };

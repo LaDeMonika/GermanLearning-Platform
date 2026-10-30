@@ -84,15 +84,36 @@ function possTable(stem, hiGender, withNouns) {
 
 /* ---------- Routing ---------- */
 
-const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, genders: renderGenders, perfekt: renderPerfekt, tables: renderTables, practice: renderPractice };
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, genders: renderGenders, perfekt: renderPerfekt, praeteritum: renderPraeteritum, wortstellung: renderWordOrder, tables: renderTables, practice: renderPractice };
 function route() {
   const r = location.hash.slice(1).split('/')[0] || 'cases';
   const key = ROUTES[r] ? r : 'cases';
   $$('nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + key));
+  $$('.navgroup').forEach(g => $('.navbtn', g).classList.toggle('active', !!$('a.active', g)));
+  closeMenus();
   ROUTES[key]();
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
+
+/* ---------- Header dropdown menus ---------- */
+
+function closeMenus() {
+  $$('.navgroup').forEach(g => { g.classList.remove('open'); $('.navbtn', g).setAttribute('aria-expanded', 'false'); });
+}
+
+$$('.navbtn').forEach(btn => btn.addEventListener('click', e => {
+  e.stopPropagation();
+  const group = btn.parentElement;
+  const opening = !group.classList.contains('open');
+  closeMenus();
+  if (opening) {
+    group.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}));
+document.addEventListener('click', e => { if (!e.target.closest('.navgroup')) closeMenus(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
 
 /* =========================================================
    CASES (learn)
@@ -900,6 +921,386 @@ function drawPerfBuilder() {
 }
 
 /* =========================================================
+   WORD ORDER
+   ========================================================= */
+
+// sub = weak-spot topic
+const WO_FORMS = {
+  svo: { label: 'statement', sub: 'main' },
+  time: { label: 'start with the time', sub: 'main' },
+  modal: { label: '+ modal verb', sub: 'main' },
+  perf: { label: 'Perfekt', sub: 'main' },
+  yn: { label: 'yes/no question', sub: 'question' },
+  wq: { label: 'W-question', sub: 'question' },
+  sub: { label: 'weil / dass / ob …', sub: 'sub' },
+  subModal: { label: 'weil … + modal', sub: 'sub' },
+  subPerf: { label: 'weil … + Perfekt', sub: 'sub' },
+  zero: { label: 'aber / denn / und', sub: 'conj0' },
+  first: { label: 'clause first', sub: 'sub' },
+  adv: { label: 'deshalb / trotzdem …', sub: 'adv' },
+};
+
+const WO_WHY = {
+  svo: 'The conjugated verb is always in <b>position 2</b>. In the middle, time usually comes before the object or place.',
+  time: 'Something other than the subject is in position 1, so the subject moves <b>behind the verb</b>. The verb stays in position 2.',
+  modal: 'The modal verb is conjugated in position 2. The main verb goes to the end as an <b>infinitive</b>.',
+  perf: 'haben / sein in position 2, the <b>participle</b> at the end.',
+  yn: 'Yes/no question: the verb comes <b>first</b>.',
+  wq: 'W-question: question word in position 1, verb in <b>position 2</b>, then the subject.',
+  sub: '<b>{c}</b> sends the conjugated verb to the <b>very end</b>. A separable verb joins back together there.',
+  subModal: '<b>{c}</b> sends the conjugated verb (the modal) to the very end, after the infinitive.',
+  subPerf: '<b>{c}</b> sends haben / sein to the very end, after the participle.',
+  zero: '<b>{c}</b> is "position 0" (und, aber, oder, denn, sondern). It changes nothing: normal order follows.',
+  first: 'The whole clause before the comma is position 1, so the verb comes <b>right after the comma</b>: verb, comma, verb.',
+  adv: '<b>{c}</b> is a connecting adverb: it takes <b>position 1</b> itself, so the verb comes right after it, then the subject.',
+  jeDesto: '<b>je</b> works like weil: its verb goes to the <b>end</b>. <b>desto</b> + comparative is position 1 of the second part, so its verb comes <b>right after</b> it.',
+};
+
+// Chunk roles: S subject · V conjugated verb (position 1/2) · VE conjugated verb at the end · E other end part · X anything else
+function woBuild(cl, subj, form, opts = {}) {
+  const i = CONJ_INDEX[subj.k];
+  const verb = cl.forms[i];
+  const S = { t: subj.w, r: 'S' };
+  const X = t => ({ t, r: 'X' });
+  const rest = cl.rest ? [X(cl.rest)] : [];
+  const sepEnd = cl.sep ? [{ t: cl.sep, r: 'E' }] : [];
+  const modal = WO_MODALS[opts.modal || 'müssen'][i];
+  const aux = CONJ[cl.aux === 's' ? 'sein' : 'haben'][subj.k];
+  const intro = opts.intro || WO_SUB_INTROS[0];
+  const adv = opts.adv || WO_ADV_INTROS[0];
+  const zero = opts.zero || WO_ZERO_INTROS[0];
+  const shapes = {
+    svo: () => ({ chunks: [S, { t: verb, r: 'V' }, X(cl.time), ...rest, ...sepEnd] }),
+    time: () => ({ chunks: [X(cl.time), { t: verb, r: 'V' }, S, ...rest, ...sepEnd] }),
+    modal: () => ({ chunks: [S, { t: modal, r: 'V' }, X(cl.time), ...rest, { t: cl.inf, r: 'E' }] }),
+    perf: () => ({ chunks: [S, { t: aux, r: 'V' }, X(cl.past), ...rest, { t: cl.pp, r: 'E' }] }),
+    yn: () => ({ chunks: [{ t: verb, r: 'V' }, S, X(cl.time), ...rest, ...sepEnd], punct: '?' }),
+    wq: () => ({ chunks: [X('wann'), { t: verb, r: 'V' }, S, ...rest, ...sepEnd], punct: '?' }),
+    sub: () => ({ prefix: `${intro.p} ${intro.c}`, conj: intro.c, chunks: [S, X(cl.time), ...rest, { t: (cl.sep || '') + verb, r: 'VE' }] }),
+    subModal: () => ({ prefix: `${intro.p} ${intro.c}`, conj: intro.c, chunks: [S, X(cl.time), ...rest, { t: cl.inf, r: 'E' }, { t: modal, r: 'VE' }] }),
+    subPerf: () => ({ prefix: `${intro.p} ${intro.c}`, conj: intro.c, chunks: [S, X(cl.past), ...rest, { t: cl.pp, r: 'E' }, { t: aux, r: 'VE' }] }),
+    zero: () => ({ prefix: `${zero.p} ${zero.c}`, conj: zero.c, chunks: [S, { t: verb, r: 'V' }, X(cl.time), ...rest, ...sepEnd] }),
+    first: () => ({ prefix: opts.first || WO_FIRST_INTROS[0], chunks: [{ t: verb, r: 'V' }, S, X(cl.time), ...rest, ...sepEnd] }),
+    adv: () => ({ prefix: `${adv.p} ${adv.c}`, conj: adv.c, chunks: [{ t: verb, r: 'V' }, S, X(cl.time), ...rest, ...sepEnd] }),
+  };
+  return Object.assign({ prefix: '', punct: '.', form, cl }, shapes[form]());
+}
+
+const woWord = (b, n) => (n === 0 && !b.prefix ? cap(b.chunks[n].t) : b.chunks[n].t);
+const woText = b => `${b.prefix ? b.prefix + ' ' : ''}${b.chunks.map((c, n) => woWord(b, n) + (c.comma ? ',' : '')).join(' ')}${b.punct}`;
+
+// je … desto sentences are fixed, not built from a clause
+function jeDestoBuild(item) {
+  const chunks = item.map(([t, r]) => ({ t, r }));
+  chunks[chunks.findIndex(c => c.r === 'VE')].comma = true;
+  return { prefix: '', punct: '.', form: 'jeDesto', cl: {}, chunks };
+}
+
+const fillGap = (s, html) => s.replace('___', html);
+
+// Practice: the missing half of entweder … oder, weder … noch …
+function woPair() {
+  const it = rnd(CONNECTOR_PAIRS);
+  const fmt = w => (it.s.startsWith('___') ? cap(w) : w);
+  const others = shuffle(CONNECTOR_PAIR_WORDS.filter(w => w !== it.a.toLowerCase())).slice(0, 3);
+  return {
+    sub: 'conj2',
+    hint: 'Two-part connector: find the missing half.',
+    sentence: fillGap(it.s, '<span class="blank">___</span>'),
+    steps: [{ ask: 'Which word completes the pair?', options: shuffle([it.a.toLowerCase(), ...others]).map(w => ({ v: fmt(w), l: fmt(w) })), answer: it.a }],
+    explain: `<b>${it.pair}</b> = ${it.en}<div class="full">${fillGap(it.s, `<b>${it.a}</b>`)}</div>`,
+  };
+}
+
+const CONN_TYPE_TEXT = {
+  zero: 'needs normal order after it: subject, then verb (position 0)',
+  adv: 'needs the verb right after it (it takes position 1 itself)',
+  sub: 'needs the verb at the very end (Nebensatz)',
+};
+
+// Practice: same meaning, three word orders; the verb position picks the connector
+function woPick() {
+  const g = rnd(CONNECTOR_PICK);
+  const it = rnd(g.items);
+  const fmt = w => (it.s.startsWith('___') ? cap(w) : w);
+  return {
+    sub: 'adv',
+    hint: 'Same meaning, different word order. Look at where the verb is after the gap.',
+    sentence: fillGap(it.s, '<span class="blank">___</span>'),
+    steps: [{ ask: 'Which connector fits this word order?', options: g.opts.map(w => ({ v: w, l: fmt(w) })), answer: it.a }],
+    explain: `<ul class="connlist">${g.opts.map(w => `<li>${w === it.a ? '✓' : '✗'} <b>${w}</b> ${CONN_TYPE_TEXT[CONNECTOR_TYPE[w]]}</li>`).join('')}</ul>
+      <div class="full">${fillGap(it.s, `<b>${fmt(it.a)}</b>`)}</div>`,
+  };
+}
+
+function woWhy(b) {
+  let why = WO_WHY[b.form].replace('{c}', b.conj || '');
+  if (b.cl.sep && ['svo', 'time', 'yn', 'wq', 'zero', 'first'].includes(b.form)) why += ` Separable verb: the prefix <b>${b.cl.sep}</b> goes to the very end.`;
+  return why;
+}
+
+function woBlocks(b) {
+  const label = (c, n) => ({
+    S: 'subject',
+    V: n === 0 && !b.prefix ? 'verb: position 1' : 'verb: position 2',
+    VE: 'verb at the end',
+    E: 'end',
+  }[c.r] || '');
+  return `<div class="klammer">${b.prefix ? `<div><span class="kb kb-pre">${b.prefix}</span><small>${b.form === 'first' ? 'position 1' : ''}</small></div>` : ''}
+    ${b.chunks.map((c, n) => `<div><span class="kb kb-${c.r}">${woWord(b, n)}${c.comma ? ',' : ''}</span><small>${label(c, n)}</small></div>`).join('')}
+    <div><span class="kb kb-punct">${b.punct}</span><small></small></div></div>`;
+}
+
+const woState = { verb: 'aufstehen', subj: 'ich', form: 'svo' };
+
+function renderWordOrder() {
+  const lern = WO_CLAUSES.find(c => c.inf === 'lernen');
+  const auf = WO_CLAUSES.find(c => c.inf === 'aufstehen');
+  const fahr = WO_CLAUSES.find(c => c.inf === 'fahren');
+  const ich = WO_SUBJECTS[0];
+  const du = WO_SUBJECTS[1];
+  const ex = (cl, s, form, opts) => woBlocks(woBuild(cl, s, form, opts));
+  const objFirst = { prefix: '', punct: '.', form: 'time', chunks: [{ t: 'Deutsch', r: 'X' }, { t: 'lerne', r: 'V' }, { t: 'ich', r: 'S' }, { t: 'heute', r: 'X' }] };
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Word order</h2>
+    <p class="lead">Rule number one: in a normal sentence the conjugated verb is <b>always in position 2</b>. A position is a block, not a word: <i>am Samstag</i> or <i>meine Eltern</i> count as one.</p>
+    ${ex(lern, ich, 'svo')}
+    ${ex(lern, ich, 'time')}
+    ${woBlocks(objFirst)}
+    <p class="muted">Whatever comes first, the verb stays second. If the subject isn't first, it moves right behind the verb.</p>
+  </section>
+
+  <section class="card">
+    <h2>The verb bracket</h2>
+    <p class="muted">When the verb has two parts, the second part goes to the <b>very end</b>.</p>
+    <h4>Separable verb</h4>${ex(auf, ich, 'svo')}
+    <h4>Modal verb + infinitive</h4>${ex(fahr, ich, 'modal', { modal: 'müssen' })}
+    <h4>Perfekt: haben / sein + participle</h4>${ex(fahr, ich, 'perf')}
+  </section>
+
+  <section class="card">
+    <h2>Questions</h2>
+    <h4>Yes/no question: verb first</h4>${ex(fahr, du, 'yn')}
+    <h4>W-question: question word, then verb</h4>${ex(fahr, du, 'wq')}
+  </section>
+
+  <section class="card">
+    <h2>Connecting sentences</h2>
+    <p class="muted">Every connecting word belongs to one of three groups. The group decides where the verb goes.</p>
+    <div class="conn3">
+      <div class="ww dat"><div class="big">1 · Position 0</div><p>Nothing changes: subject, verb …<br><b>${WO_ZERO_CONJ.join(', ')}</b></p></div>
+      <div class="ww gen3"><div class="big">2 · Verb right after</div><p>The word itself is position 1, so the verb comes next.<br><b>${WO_ADV_CONJ.map(a => a[0]).join(', ')}</b></p></div>
+      <div class="ww akk"><div class="big">3 · Verb to the end</div><p>Subordinate clause (Nebensatz), always with a comma.<br><b>${WO_SUB_CONJ.join(', ')}</b></p></div>
+    </div>
+    <h4>1 · aber: normal order</h4>${ex(lern, ich, 'zero', { zero: WO_ZERO_INTROS[0] })}
+    <h4>2 · trotzdem: verb right after</h4>${ex(lern, ich, 'adv', { adv: WO_ADV_INTROS[2] })}
+    <h4>2 · deshalb: verb right after</h4>${ex(fahr, ich, 'adv', { adv: WO_ADV_INTROS[0] })}
+    <h4>3 · weil: verb at the end</h4>${ex(lern, ich, 'sub', { intro: WO_SUB_INTROS[0] })}
+    <h4>3 · Separable verbs join back together</h4>${ex(auf, ich, 'sub', { intro: WO_SUB_INTROS[0] })}
+    <h4>3 · Two verbs: the conjugated one is last</h4>${ex(fahr, ich, 'subModal', { intro: WO_SUB_INTROS[1], modal: 'müssen' })}${ex(fahr, ich, 'subPerf', { intro: WO_SUB_INTROS[1] })}
+    <h4>3 · Nebensatz first: verb, comma, verb</h4>${ex(lern, ich, 'first', { first: WO_FIRST_INTROS[0] })}
+  </section>
+
+  <section class="card">
+    <h2>Same meaning, three word orders</h2>
+    <p class="muted">These say the same thing. Only the verb position changes.</p>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>1 · Position 0</th><th>2 · Verb right after</th><th>3 · Verb to the end</th></tr></thead>
+      <tbody>
+        <tr><th>reason</th><td>…, <b>denn</b> ich <u>bin</u> krank.</td><td>Ich bin krank, <b>deshalb</b> <u>bleibe</u> ich zu Hause.</td><td>…, <b>weil</b> ich krank <u>bin</u>.</td></tr>
+        <tr><th>contrast</th><td>Es regnet, <b>aber</b> ich <u>gehe</u> raus.</td><td>Es regnet, <b>trotzdem</b> <u>gehe</u> ich raus.</td><td>Ich gehe raus, <b>obwohl</b> es <u>regnet</u>.</td></tr>
+        <tr><th>time</th><td>Ich esse, <b>und</b> ich <u>gehe</u> dann.</td><td>Ich esse, <b>dann</b> <u>gehe</u> ich.</td><td>Ich esse, <b>bevor</b> ich <u>gehe</u>.</td></tr>
+        <tr><th>condition</th><td>Beeil dich, <b>oder</b> du <u>verpasst</u> den Zug.</td><td>Beeil dich, <b>sonst</b> <u>verpasst</u> du den Zug.</td><td><b>Wenn</b> du dich nicht <u>beeilst</u>, …</td></tr>
+      </tbody>
+    </table></div>
+    <h4>Connecting adverbs and their meaning</h4>
+    <div class="chips">${WO_ADV_CONJ.map(([w, en]) => `<span class="pill"><b>${w}</b> · ${en}</span>`).join('')}</div>
+    <p class="muted">Tip: connecting adverbs can also stand in the middle: <i>Es regnet. Ich gehe <u>trotzdem</u> raus.</i> Then the subject keeps position 1.</p>
+  </section>
+
+  <section class="card">
+    <h2>Two-part connectors</h2>
+    <h4>je … desto: the more …, the more …</h4>
+    ${woBlocks(jeDestoBuild(JE_DESTO[0]))}
+    ${woBlocks(jeDestoBuild(JE_DESTO[4]))}
+    <p class="muted">The je-part works like a weil-clause (verb at the end). The desto-part starts with desto + comparative, then comes the verb.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Pair</th><th>Meaning</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><th>entweder … oder</th><td>either … or</td><td>Wir fahren <b>entweder</b> ans Meer <b>oder</b> in die Berge.</td></tr>
+        <tr><th>weder … noch</th><td>neither … nor</td><td>Ich trinke <b>weder</b> Kaffee <b>noch</b> Tee.</td></tr>
+        <tr><th>sowohl … als auch</th><td>both … and</td><td>Sie spricht <b>sowohl</b> Deutsch <b>als auch</b> Englisch.</td></tr>
+        <tr><th>nicht nur … sondern auch</th><td>not only … but also</td><td>Er ist <b>nicht nur</b> nett, <b>sondern auch</b> lustig.</td></tr>
+        <tr><th>zwar … aber</th><td>admittedly … but</td><td>Das Auto ist <b>zwar</b> alt, <b>aber</b> es fährt noch gut.</td></tr>
+        <tr><th>je … desto</th><td>the more … the more</td><td><b>Je</b> mehr ich übe, <b>desto</b> besser werde ich.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Sentence transformer</h2>
+    <p class="muted">Pick a verb, a subject and a sentence shape. Watch the blocks move.</p>
+    <div id="woTool"></div>
+  </section>
+
+  <section class="card">
+    <h2>Tips</h2>
+    <div class="tips">
+      <div class="tip"><b>weil vs denn</b>Same meaning, different order: <i>…, weil ich müde <u>bin</u></i> vs <i>…, denn ich <u>bin</u> müde</i>.</div>
+      <div class="tip"><b>The middle: TeKaMoLo</b>Time, cause (Kausal), manner (Modal), place (Lokal): <i>Ich fahre <u>morgen</u> <u>wegen der Arbeit</u> <u>mit dem Zug</u> <u>nach Berlin</u>.</i></div>
+      <div class="tip"><b>Always a comma</b>before weil, dass, ob, wenn … Never before und / oder joining two short parts.</div>
+    </div>
+  </section>`;
+
+  drawWoTool();
+}
+
+function drawWoTool() {
+  const st = woState;
+  const cl = WO_CLAUSES.find(c => c.inf === st.verb);
+  const subj = WO_SUBJECTS.concat(WO_SUBJECTS_Q).find(s => s.w === st.subj);
+  const b = woBuild(cl, subj, st.form);
+  const chips = (key, list) => `<div class="chips">${list.map(([v, l]) => `<button class="chipbtn ${st[key] === v ? 'on' : ''}" data-k="${key}" data-v="${v}">${l}</button>`).join('')}</div>`;
+  $('#woTool').innerHTML = `
+    <div class="bgrid">
+      <div><h4>Verb</h4>${chips('verb', WO_CLAUSES.map(c => [c.inf, c.inf]))}</div>
+      <div><h4>Subject</h4>${chips('subj', uniq(WO_SUBJECTS.concat(WO_SUBJECTS_Q).map(s => s.w)).map(w => [w, w]))}</div>
+      <div><h4>Shape</h4>${chips('form', Object.keys(WO_FORMS).map(f => [f, WO_FORMS[f].label]))}</div>
+    </div>
+    ${woBlocks(b)}
+    <p>${woWhy(b)}</p>`;
+  $$('#woTool [data-k]').forEach(btn => btn.addEventListener('click', () => { st[btn.dataset.k] = btn.dataset.v; drawWoTool(); }));
+}
+
+/* =========================================================
+   PRÄTERITUM
+   ========================================================= */
+
+// The Perfekt verbs (their sentences turned into Präteritum) + haben and the modal verbs
+const PRAET_VERBS = PERFEKT_VERBS.map(v => {
+  const [p, t, g] = PRAET_FORMS[v.inf];
+  return { inf: v.inf, en: v.en, p, t, g, sep: v.sep, refl: v.refl, perf: v,
+    s: v.s.replace('{AUX}', '{V}').replace(' {PP}', v.sep ? ' ' + v.sep : '') };
+}).concat(PRAET_EXTRA);
+
+const PRAET_KEYS = ['ich', 'du', 'er', 'wir', 'ihr', 'siePl'];
+const PRAET_KEY_LABEL = { ich: 'ich', du: 'du', er: 'er / sie / es', wir: 'wir', ihr: 'ihr', siePl: 'sie / Sie' };
+const praetSub = v => ({ w: 'regular', s: 'irregular', m: 'irregular', mod: 'modal', aux: 'modal' }[v.t]);
+// Perfekt of the extra verbs, for the table
+const PRAET_EXTRA_PERF = { haben: 'hat gehabt', können: 'hat gekonnt', müssen: 'hat gemusst', wollen: 'hat gewollt', dürfen: 'hat gedurft', sollen: 'hat gesollt', mögen: 'hat gemocht' };
+
+// Stems ending in -e take -st, -n, -t (machte → machtest); others take -st/-est, -en, -t/-et (ging → gingst, las → lasest)
+function praetForm(v, key) {
+  const i = CONJ_INDEX[key];
+  if (v.p.endsWith('e')) return v.p + ['', 'st', '', 'n', 't', 'n'][i];
+  const du = /[sßzdt]$/.test(v.p) ? 'est' : 'st';
+  const ihr = /[dt]$/.test(v.p) ? 'et' : 't';
+  return v.p + ['', du, '', 'en', ihr, 'en'][i];
+}
+const praetHl = (v, key) => { const f = praetForm(v, key); return `${v.p}<span class="end">${f.slice(v.p.length)}</span>`; };
+const praetSentence = (v, key, word) => v.s.replace('{S}', cap(PRONOUNS[key].nom)).replace('{V}', word).replace('{R}', v.refl ? REFL[key].akk : '');
+const perfSentence = (v, key) => (v.perf
+  ? v.perf.s.replace('{S}', cap(PRONOUNS[key].nom)).replace('{AUX}', CONJ[auxInf(v.perf)][key]).replace('{R}', v.refl ? REFL[key].akk : '').replace('{PP}', v.perf.pp)
+  : '');
+const umlautForm = f => f.replace(/[ou]/, ch => ({ o: 'ö', u: 'ü' }[ch]));
+
+// Typical wrong answers: another person's ending, regular -te for irregular verbs, könnte, present tense
+function praetDistractors(v, key) {
+  const form = praetForm(v, key);
+  const i = CONJ_INDEX[key];
+  const stem = v.inf.replace(/^sich /, '').slice((v.sep || '').length).replace(/e?n$/, '');
+  const out = [praetForm(v, i === 0 || i === 2 ? 'wir' : 'ich')];
+  if (v.t !== 'w' && v.inf !== 'sein' && v.inf !== 'werden') out.push(praetForm({ p: stem + (/[td]$/.test(stem) ? 'ete' : 'te') }, key));
+  if (v.t === 'mod' && /[äöü]/.test(v.inf)) out.push(umlautForm(form));
+  if (v.t === 'aux') out.push(PRESENT_AUX[v.inf][i]);
+  else out.push(stem + (/[td]$/.test(stem) ? ['e', 'est', 'et', 'en', 'et', 'en'] : ['e', /[sßz]$/.test(stem) ? 't' : 'st', 't', 'en', 't', 'en'])[i]);
+  return uniq(out).filter(x => x !== form).slice(0, 3);
+}
+// Present tense of sein / haben / werden, as distractors
+const PRESENT_AUX = {
+  sein: ['bin', 'bist', 'ist', 'sind', 'seid', 'sind'],
+  haben: ['habe', 'hast', 'hat', 'haben', 'habt', 'haben'],
+  werden: ['werde', 'wirst', 'wird', 'werden', 'werdet', 'werden'],
+};
+
+const praetState = { verb: 'gehen' };
+
+function renderPraeteritum() {
+  const find = inf => PRAET_VERBS.find(v => v.inf === inf);
+  const sample = ['machen', 'arbeiten', 'gehen', 'sein', 'haben', 'können', 'bringen'].map(find);
+  const groups = Object.keys(PRAET_GROUPS).map(g => `<div class="tip"><b>${PRAET_GROUPS[g]}</b>${PRAET_VERBS.filter(v => v.g === g && !v.sep).map(v => `${v.inf} → ${v.p}`).join('<br>')}</div>`).join('');
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Präteritum: the written past</h2>
+    <p class="lead">German has two past tenses that mean the same thing. Which one you use depends on <b>speaking or writing</b>.</p>
+    <div class="wowohin">
+      <div class="ww dat"><div class="big">🗣️ Speaking → Perfekt</div><p><i>Gestern <b>bin</b> ich ins Kino <b>gegangen</b>.</i></p></div>
+      <div class="ww akk"><div class="big">📖 Writing → Präteritum</div><p>Stories, books, news: <i>Gestern <b>ging</b> ich ins Kino.</i></p></div>
+    </div>
+    <div class="tips">
+      <div class="tip"><b>The exception: use these in speech too</b><i>war, hatte, wurde</i>, the modal verbs (<i>konnte, musste, wollte, durfte, sollte, mochte</i>), <i>wusste</i> and <i>es gab</i>. Nobody says “ich bin gewesen” half as often as “ich war”.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The endings</h2>
+    <p class="muted"><b>ich</b> and <b>er / sie / es</b> are always the same and have no ending (highlighted rows).</p>
+    <div class="tw"><table><thead><tr><th></th>${sample.map(v => `<th>${v.inf}<span class="sub">${PRAET_TYPES[v.t].label}</span></th>`).join('')}</tr></thead><tbody>
+      ${PRAET_KEYS.map(k => `<tr class="${k === 'ich' || k === 'er' ? 'same' : ''}"><th>${PRAET_KEY_LABEL[k]}</th>${sample.map(v => `<td class="f">${praetHl(v, k)}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+  </section>
+
+  <section class="card">
+    <h2>Five kinds of verbs</h2>
+    <div class="tips">${Object.keys(PRAET_TYPES).map(t => `<div class="tip"><b>${PRAET_TYPES[t].label}</b>${PRAET_TYPES[t].rule}</div>`).join('')}</div>
+  </section>
+
+  <section class="card">
+    <h2>Irregular verbs: sort them by the new vowel</h2>
+    <p class="muted">Most irregular verbs change their vowel to a. Learning them in groups helps.</p>
+    <div class="tips">${groups}</div>
+  </section>
+
+  <section class="card">
+    <h2>Verb builder</h2>
+    <p class="muted">Pick a verb: every Präteritum form next to the spoken Perfekt.</p>
+    <div id="praetBuilder"></div>
+  </section>
+
+  <section class="card">
+    <h2>Tips</h2>
+    <div class="tips">
+      <div class="tip"><b>Separable verbs split, like in the present</b><i>Ich stand um 7 Uhr <u>auf</u>. Sie rief mich <u>an</u>.</i></div>
+      <div class="tip"><b>konnte or könnte?</b><i>konnte</i> = could (past). <i>könnte</i> (umlaut) = could / would be able (Konjunktiv II). Same for musste / müsste, durfte / dürfte.</div>
+      <div class="tip"><b>es gab = there was / there were</b><i>Früher gab es hier einen Park.</i></div>
+      <div class="tip"><b>Fairy tales</b><i>Es war einmal …</i> = Once upon a time … All in Präteritum.</div>
+    </div>
+  </section>`;
+
+  drawPraetBuilder();
+}
+
+function drawPraetBuilder() {
+  const v = PRAET_VERBS.find(x => x.inf === praetState.verb) || PRAET_VERBS[0];
+  const typeKeys = ['aux', 'mod', 'w', 's', 'm'];
+  $('#praetBuilder').innerHTML = `
+    ${typeKeys.map(t => `<h4>${PRAET_TYPES[t].label}</h4><div class="chips">${PRAET_VERBS.filter(x => x.t === t).map(x => `<button class="chipbtn ${x === v ? 'on' : ''}" data-verb="${x.inf}">${x.inf}</button>`).join('')}</div>`).join('')}
+    <div class="build-out">${v.inf} → ${v.p}${v.sep ? ` … ${v.sep}` : ''}</div>
+    <p><b>${PRAET_TYPES[v.t].label}</b>: ${PRAET_TYPES[v.t].rule}${v.g ? ` · vowel group <b>${PRAET_GROUPS[v.g]}</b>` : ''}</p>
+    <div class="tw"><table>
+      <thead><tr><th></th><th>Präteritum (written)</th><th>Perfekt (spoken)</th></tr></thead>
+      <tbody>${PRAET_KEYS.map(k => `<tr class="${k === 'ich' || k === 'er' ? 'same' : ''}"><th>${PRAET_KEY_LABEL[k]}</th>
+        <td class="f">${praetHl(v, k)}${v.sep ? ` … ${v.sep}` : ''}</td>
+        <td>${v.perf ? `${CONJ[auxInf(v.perf)][k]} ${v.refl ? REFL[k].akk + ' ' : ''}… ${v.perf.pp}` : '<span class="muted">mostly Präteritum</span>'}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="muted" style="margin-top:8px">Example: ${praetSentence(v, 'ich', `<b>${praetForm(v, 'ich')}</b>`)}${v.perf ? ` · spoken: ${perfSentence(v, 'ich')}` : ''}</p>`;
+  $$('#praetBuilder [data-verb]').forEach(b => b.addEventListener('click', () => { praetState.verb = b.dataset.verb; drawPraetBuilder(); }));
+}
+
+/* =========================================================
    TABLES
    ========================================================= */
 
@@ -915,7 +1316,7 @@ function renderTables() {
   app.innerHTML = `
   <section class="card">
     <h2>Tables</h2>
-    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a><a href="#t-perf" data-jump>Perfekt participles</a></div>
+    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a><a href="#t-perf" data-jump>Perfekt participles</a><a href="#t-praet" data-jump>Präteritum</a></div>
   </section>
 
   <section class="card" id="t-art">
@@ -986,6 +1387,18 @@ function renderTables() {
       <thead><tr><th>Infinitive</th><th>Participle</th><th>haben / sein</th><th>Type</th></tr></thead>
       <tbody>${PP_TYPE_KEYS.flatMap(t => PERFEKT_VERBS.filter(v => v.type === t)).map(v => `<tr><th>${v.inf}<span class="sub">${v.en}</span></th><td class="f">${ppParts(v)}</td><td class="${v.aux === 's' ? 'f c-akk' : ''}">${auxInf(v)}</td><td class="muted">${PP_TYPES[v.type].label}</td></tr>`).join('')}</tbody>
     </table></div>
+  </section>
+
+  <section class="card" id="t-praet">
+    <h2>Präteritum</h2>
+    <p class="muted">er / sie / es form. ich is the same.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Infinitive</th><th>Präteritum</th><th>Perfekt</th><th>Type</th></tr></thead>
+      <tbody>${['aux', 'mod', 's', 'm', 'w'].flatMap(t => PRAET_VERBS.filter(v => v.t === t)).map(v => `<tr><th>${v.inf}<span class="sub">${v.en}</span></th>
+        <td class="f">${v.p}${v.sep ? ` … ${v.sep}` : ''}</td>
+        <td>${v.perf ? `${CONJ[auxInf(v.perf)].er} ${v.perf.pp}` : PRAET_EXTRA_PERF[v.inf]}</td>
+        <td class="muted">${PRAET_TYPES[v.t].label}${v.g ? ` ${PRAET_GROUPS[v.g]}` : ''}</td></tr>`).join('')}</tbody>
+    </table></div>
   </section>`;
 
   drawPossBody();
@@ -1039,6 +1452,8 @@ const MODES = {
   ww: { title: '📍 Wo or Wohin?', d: 'auf dem Tisch or auf den Tisch? im or ins?' },
   genders: { title: '🏷️ der · die · das', d: 'Noun genders, ending rules, compounds.' },
   perfekt: { title: '⏮️ Perfekt', d: 'haben or sein? gemacht, gegangen, aufgestanden …' },
+  praet: { title: '⏪ Präteritum', d: 'war, hatte, konnte, ging, machte …' },
+  wo: { title: '🧩 Word order', d: 'Tap the words into the right order.' },
   mix: { title: '🔀 Mix', d: 'All of the above.' },
   review: { title: '🎯 Weak spots', d: 'More of what you get wrong. Misses come back.' },
 };
@@ -1305,6 +1720,63 @@ const GEN = {
     };
   },
 
+  wo() {
+    const form = rnd(['svo', 'time', 'time', 'modal', 'perf', 'yn', 'wq', 'sub', 'sub', 'subModal', 'subPerf', 'zero', 'first',
+      'adv', 'adv', 'jeDesto', 'pair', 'pick', 'pick']);
+    if (form === 'pair') return woPair();
+    if (form === 'pick') return woPick();
+    const cl = rnd(WO_CLAUSES);
+    const subj = rnd(form === 'yn' || form === 'wq' ? WO_SUBJECTS_Q : WO_SUBJECTS);
+    const opts = { modal: rnd(Object.keys(WO_MODALS)), intro: rnd(WO_SUB_INTROS), zero: rnd(WO_ZERO_INTROS), first: rnd(WO_FIRST_INTROS), adv: rnd(WO_ADV_INTROS) };
+    const b = form === 'jeDesto' ? jeDestoBuild(rnd(JE_DESTO)) : woBuild(cl, subj, form, opts);
+    const words = b.chunks.map(c => c.t);
+    let tiles;
+    do { tiles = shuffle(words); } while (tiles.join(' ') === words.join(' '));
+    // Statements could start with almost anything, so their first block is given
+    const locked = ['svo', 'time', 'modal', 'perf', 'zero', 'jeDesto'].includes(form) ? tiles.indexOf(words[0]) : null;
+    const asks = {
+      svo: `Make a statement starting with “${cap(words[0])}”.`,
+      time: `Start with the time: “${cap(words[0])}”.`,
+      modal: `Make a statement with the modal verb <b>${opts.modal}</b>.`,
+      perf: 'Make a statement in the Perfekt.',
+      yn: 'Make a yes/no question.',
+      wq: 'Make a question with “wann”.',
+      first: 'Finish the sentence after the comma.',
+      jeDesto: 'Build the sentence: the more …, the more …',
+    };
+    const answer = words.join(' ');
+    return {
+      sub: form === 'jeDesto' ? 'conj2' : WO_FORMS[form].sub,
+      hint: form === 'jeDesto' ? '<b>je … desto</b> · the more …, the more …' : `verb: <b>${cl.inf}</b>`,
+      steps: [{ ask: asks[form] || `Finish the sentence after “${b.conj}”.`, tiles, locked, prefix: b.prefix, punct: b.punct,
+        answer, answerLabel: woText(b), check: v => ({ ok: v.toLowerCase() === answer.toLowerCase() }) }],
+      explain: `<p>${woWhy(b)}</p>${woBlocks(b)}<div class="full">${woText(b)}</div>`,
+    };
+  },
+
+  praet() {
+    const v = rnd(PRAET_VERBS);
+    const key = rnd(PRONOUN_KEYS.filter(k => k !== 'es'));
+    const P = PRONOUNS[key];
+    const form = praetForm(v, key);
+    const spoken = perfSentence(v, key);
+    const noEnding = CONJ_INDEX[key] === 0 || CONJ_INDEX[key] === 2;
+    return {
+      sub: praetSub(v),
+      hint: `<b>${v.inf}</b> <small>(${v.en})</small> · subject: <b>${P.label}</b> <small>(${P.en})</small>`,
+      sentence: praetSentence(v, key, '<span class="blank">___</span>'),
+      steps: [{ ask: `Put <b>${v.inf}</b> in the Präteritum.`, answer: form,
+        options: typeMode() ? null : shuffle([form, ...praetDistractors(v, key)]).map(x => ({ v: x, l: x })),
+        check: x => ({ ok: x.trim().toLowerCase() === form.toLowerCase() }) }],
+      explain: `<ol>
+        <li><b>${PRAET_TYPES[v.t].label}:</b> ${PRAET_TYPES[v.t].rule} → ${v.inf} → <b>${v.p}</b>${v.g ? ` <small>(vowel group ${PRAET_GROUPS[v.g]})</small>` : ''}</li>
+        <li><b>Ending for ${P.label}:</b> ${praetHl(v, key)}${noEnding ? ' <small>(ich and er/sie/es have no ending)</small>' : ''}</li>
+        ${v.sep ? `<li>Separable verb: the prefix <b>${v.sep}</b> goes to the end, just like in the present.</li>` : ''}
+        ${v.t === 'mod' && /[äöü]/.test(v.inf) ? `<li><small>Careful: <i>${umlautForm(form)}</i> (with umlaut) is Konjunktiv II = “could / would”, not the past.</small></li>` : ''}
+      </ol><div class="full">${praetSentence(v, key, `<b>${form}</b>`)}</div>${spoken ? `<p class="muted">Spoken (Perfekt): ${spoken}</p>` : ''}`,
+    };
+  },
+
   perfekt() {
     const v = rnd(PERFEKT_VERBS);
     const key = rnd(PRONOUN_KEYS.filter(k => k !== 'es'));
@@ -1402,15 +1874,35 @@ function newExercise() {
     return;
   }
   const mode = settings.mode === 'mix'
-    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww', 'genders', 'genders', 'perfekt', 'perfekt'])
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww', 'genders', 'genders', 'perfekt', 'perfekt', 'praet', 'praet', 'wo', 'wo'])
     : settings.mode;
   cur = { mode, ex: GEN[mode](), step: 0, results: [] };
   drawEx();
 }
 
 function optionLabel(st, v) {
+  if (v === st.answer && st.answerLabel) return st.answerLabel;
   const o = st.options && st.options.find(x => x.v === v);
   return o ? o.l : v;
+}
+
+// Tap-to-order steps: cur.picked holds tile indexes in the chosen order
+function tilesHtml(st, res) {
+  const word = (t, n) => (n === 0 && !st.prefix ? cap(t) : t);
+  const isLocked = n => st.locked != null && n === 0;
+  let h = `<div class="buildline ${res ? (res.ok ? 'right' : 'wrong') : ''}">${st.prefix ? `<span class="muted">${st.prefix}</span>` : ''}
+    ${cur.picked.map((ti, n) => `<button class="tile in ${isLocked(n) ? 'locked' : ''}" data-pi="${n}" ${res || isLocked(n) ? 'disabled' : ''}>${esc(word(st.tiles[ti], n))}</button>`).join('')}<span class="punct">${st.punct}</span></div>`;
+  if (!res) {
+    const left = st.tiles.map((t, ti) => ({ t, ti })).filter(x => !cur.picked.includes(x.ti));
+    h += `<div class="tilepool">${left.map((x, n) => `<button class="tile" data-ti="${x.ti}"><span class="k">${n + 1}</span>${esc(x.t)}</button>`).join('')}</div>
+      <div class="next-row"><button class="primary check" ${left.length ? 'disabled' : ''}>Check</button><button class="ghost tilereset">Start over</button><span class="kbd">keys 1–9 pick · Backspace undoes · Enter checks</span></div>`;
+  }
+  return h;
+}
+
+function tileCheck(i) {
+  const st = cur.ex.steps[i];
+  if (cur.picked.length === st.tiles.length) answer(i, cur.picked.map(t => st.tiles[t]).join(' '));
 }
 
 function drawEx() {
@@ -1418,6 +1910,7 @@ function drawEx() {
   if (!box) return;
   const { ex } = cur;
   const finished = cur.results.length === ex.steps.length;
+  if (!cur.picked) cur.picked = ex.steps[0].tiles && ex.steps[0].locked != null ? [ex.steps[0].locked] : [];
   let h = `<div class="ex-head"><span class="mode-tag">${MODES[cur.mode].title}</span><span class="score">Session <b>${session.c}/${session.t}</b> · Streak <b>${session.streak}</b>${session.streak >= 3 ? ' 🔥' : ''}</span></div>`;
   if (cur.banner) h += `<div class="banner">${cur.banner}${reviewFocus && !cur.redo ? ' <button id="clearFocus">✕ all weak spots</button>' : ''}</div>`;
   if (ex.scene) h += ex.scene;
@@ -1428,7 +1921,9 @@ function drawEx() {
     if (i > cur.step) return;
     const res = cur.results[i];
     h += `<div class="step" data-step="${i}"><div class="ask">${st.ask}</div>${st.pre || ''}`;
-    if (st.options) {
+    if (st.tiles) {
+      h += tilesHtml(st, res);
+    } else if (st.options) {
       h += `<div class="opts">${st.options.map((o, n) => {
         let cls = '';
         if (res) cls = o.v === st.answer ? 'right' : (o.v === res.value ? 'wrong' : '');
@@ -1452,6 +1947,13 @@ function drawEx() {
   $$('.step', box).forEach(stepEl => {
     const i = +stepEl.dataset.step;
     $$('.opt', stepEl).forEach(b => b.addEventListener('click', () => answer(i, b.dataset.v)));
+    const st = ex.steps[i];
+    if (st.tiles && !cur.results[i]) {
+      $$('[data-ti]', stepEl).forEach(b => b.addEventListener('click', () => { cur.picked.push(+b.dataset.ti); drawEx(); }));
+      $$('[data-pi]', stepEl).forEach(b => b.addEventListener('click', () => { cur.picked.splice(+b.dataset.pi, 1); drawEx(); }));
+      $('.tilereset', stepEl).addEventListener('click', () => { cur.picked = cur.picked.slice(0, st.locked != null ? 1 : 0); drawEx(); });
+      $('.check', stepEl).addEventListener('click', () => tileCheck(i));
+    }
     const input = $('input', stepEl);
     if (input && !input.disabled) {
       const go = () => { if (input.value.trim()) answer(i, input.value); };
@@ -1501,13 +2003,15 @@ function record() {
 
 /* ---------- Weak spots ---------- */
 
-const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww', 'genders', 'perfekt'];
+const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww', 'genders', 'perfekt', 'praet', 'wo'];
 // Cases each mode can produce (null = the mode has no case)
-const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'], genders: ['m', 'f', 'n'], perfekt: ['haben', 'sein'] };
+const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'], genders: ['m', 'f', 'n'], perfekt: ['haben', 'sein'], praet: ['regular', 'irregular', 'modal'], wo: ['main', 'question', 'sub', 'conj0', 'adv', 'conj2'] };
 const topicKey = (mode, c) => `${mode}:${c || '-'}`;
 // Topic = mode + case, or mode + gender for der/die/das
 const subOf = ex => ex.caseKey || ex.sub;
-const SUB_LABEL = { m: 'der words', f: 'die words', n: 'das words', haben: 'haben verbs', sein: 'sein verbs' };
+const SUB_LABEL = { m: 'der words', f: 'die words', n: 'das words', haben: 'haben verbs', sein: 'sein verbs',
+  main: 'main clauses', question: 'questions', sub: 'weil / dass clauses', conj0: 'aber / denn / und', adv: 'deshalb / trotzdem', conj2: 'je … desto & pairs',
+  regular: 'regular verbs', irregular: 'irregular verbs', modal: 'sein, haben & modals' };
 const topicLabel = (mode, c) => `${MODES[mode].title}${c ? ` · ${CASES[c] ? CASES[c].name : SUB_LABEL[c]}` : ''}`;
 const emptyStats = () => ({ modes: {}, cases: {}, topics: {}, mistakes: [] });
 const loadStats = () => Object.assign(emptyStats(), store.get('stats', {}));
@@ -1627,11 +2131,23 @@ document.addEventListener('keydown', e => {
     newExercise();
     return;
   }
+  if (finished) return;
+  const st = cur.ex.steps[cur.step];
   const n = parseInt(e.key, 10);
-  if (!finished && n >= 1) {
-    const st = cur.ex.steps[cur.step];
-    if (st.options && st.options[n - 1]) answer(cur.step, st.options[n - 1].v);
+  if (st.tiles) {
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (cur.picked.length > (st.locked != null ? 1 : 0)) { cur.picked.pop(); drawEx(); }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      tileCheck(cur.step);
+    } else if (n >= 1) {
+      const left = st.tiles.map((t, ti) => ti).filter(ti => !cur.picked.includes(ti));
+      if (left[n - 1] != null) { cur.picked.push(left[n - 1]); drawEx(); }
+    }
+    return;
   }
+  if (n >= 1 && st.options && st.options[n - 1]) answer(cur.step, st.options[n - 1].v);
 });
 
 route();

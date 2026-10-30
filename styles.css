@@ -75,6 +75,23 @@ nav a { text-decoration: none; color: var(--muted); padding: 6px 12px; border-ra
 nav a:hover { background: var(--surface-2); color: var(--text); }
 nav a.active { background: var(--text); color: var(--bg); }
 
+/* Dropdown groups */
+nav { align-items: center; }
+.navgroup { position: relative; }
+.navbtn { border: 0; background: transparent; color: var(--muted); padding: 6px 12px; border-radius: 999px; font-weight: 500; font-size: .95rem; cursor: pointer; }
+.navbtn:hover, .navgroup.open .navbtn { background: var(--surface-2); color: var(--text); }
+.navbtn.active { background: var(--text); color: var(--bg); }
+.caret { font-size: .7rem; margin-left: 2px; }
+.menu { display: none; position: absolute; top: calc(100% + 6px); left: 0; min-width: 250px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .14); padding: 6px; z-index: 20; }
+.navgroup.open .menu { display: block; }
+nav .menu a { display: block; border-radius: 8px; padding: 8px 10px; color: var(--text); }
+nav .menu a small { display: block; color: var(--muted); font-size: .8rem; font-weight: 400; }
+nav .menu a:hover { background: var(--surface-2); }
+nav .menu a.active { background: var(--accent-bg); color: var(--accent); }
+nav .menu a.active small { color: var(--accent); }
+nav a.nav-practice { color: var(--accent); font-weight: 700; }
+nav a.nav-practice.active { background: var(--accent); color: #fff; }
+
 main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 60px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow); }
 .lead { font-size: 1.05rem; color: var(--muted); max-width: 70ch; }
@@ -332,7 +349,36 @@ mark.tgt.dat { background: var(--dat-bg); color: var(--dat); } mark.tgt.gen { ba
 .pp-end { color: var(--accent); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 .ppex { margin-top: 6px; font-size: 1rem; }
 
+/* ---------- Word order ---------- */
+.kb-V, .kb-VE { background: var(--accent-bg); color: var(--accent); }
+.kb-E { background: var(--e-bg); }
+.kb-S { box-shadow: inset 0 0 0 2px var(--border); }
+.kb-X { font-weight: 500; }
+.kb-pre { font-weight: 500; color: var(--muted); }
+.kb-punct { background: transparent; padding-left: 0; padding-right: 0; }
+.buildline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 58px; padding: 8px 10px; border: 2px dashed var(--border); border-radius: 12px; font-size: 1.15rem; margin-bottom: 10px; }
+.buildline.right { border-style: solid; border-color: var(--ok); background: var(--ok-bg); }
+.buildline.wrong { border-style: solid; border-color: var(--bad); background: var(--bad-bg); }
+.buildline .punct { font-weight: 700; font-size: 1.3rem; }
+.tilepool { display: flex; flex-wrap: wrap; gap: 8px; }
+.tile { border: 2px solid var(--border); background: var(--surface); color: var(--text); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 1.05rem; }
+.tile:hover:not(:disabled) { border-color: var(--accent); }
+.tile.in { background: var(--accent-bg); border-color: transparent; }
+.tile.locked { opacity: .75; cursor: default; }
+.tile:disabled { cursor: default; }
+.tile .k { font-size: .7rem; color: var(--muted); margin-right: 6px; font-weight: 500; }
+tr.same td, tr.same th { background: var(--accent-bg); }
+.conn3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.ww.gen3 { background: var(--e-bg); }
+.conn3 .ww .big { font-size: 1.15rem; }
+.connlist { list-style: none; padding: 0; margin: 0 0 6px; }
+.connlist li { padding: 3px 0; }
+
 @media (max-width: 600px) {
+  /* Open menus span the screen under their button (positioned against the sticky header) */
+  .navgroup { position: static; }
+  .menu { left: 16px; right: 16px; top: auto; min-width: 0; margin-top: 6px; }
+  .top-inner { gap: 6px 16px; }
   .weakrow { grid-template-columns: 1fr auto; }
   .weakrow button { grid-column: 1 / -1; justify-self: start; }
   .sigrow { grid-template-columns: 1fr; }
