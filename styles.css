@@ -19,6 +19,9 @@
 
   --p1: #c2410c; --p2: #1d5fd1; --p3: #6a6a64;
   --e-bg: #fdf3d3;
+  --gm: #0e7490; --gm-bg: #e0f4f8;
+  --gf: #be185d; --gf-bg: #fce7f1;
+  --gn: #a16207; --gn-bg: #fdf3d3;
   --radius: 14px;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
 }
@@ -40,6 +43,9 @@
     --gen: #c191eb; --gen-bg: #2e2140;
     --p1: #f59a5f; --p2: #7aa7f5; --p3: #a3a29b;
     --e-bg: #3a3216;
+    --gm: #5ccfe6; --gm-bg: #12323a;
+    --gf: #f48fb8; --gf-bg: #3a1a2a;
+    --gn: #e8c25a; --gn-bg: #3a3216;
     --shadow: none;
   }
 }
@@ -294,6 +300,37 @@ mark.tgt.dat { background: var(--dat-bg); color: var(--dat); } mark.tgt.gen { ba
 .mistakes .muted { font-size: .8rem; }
 .ok-txt { color: var(--ok); font-weight: 700; }
 .bad-txt { color: var(--bad); }
+
+/* ---------- der · die · das (own colours, so they don't clash with case colours) ---------- */
+.gt { display: inline-block; font-weight: 800; padding: 0 8px; border-radius: 6px; background: var(--surface-2); }
+.gt-m { color: var(--gm); background: var(--gm-bg); }
+.gt-f { color: var(--gf); background: var(--gf-bg); }
+.gt-n { color: var(--gn); background: var(--gn-bg); }
+.gt-pl { color: var(--muted); }
+.gcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin-top: 14px; }
+.ghead { display: block; font-size: 1.6rem; padding: 6px 12px; border-radius: 10px; margin-bottom: 8px; }
+.ghead small { font-size: .85rem; font-weight: 500; }
+.grule { padding: 8px 2px; border-bottom: 1px solid var(--border); }
+.grule:last-child { border-bottom: 0; }
+.glabel { font-weight: 700; }
+.how { font-size: .75rem; font-weight: 600; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.gex { font-size: .9rem; color: var(--muted); }
+.gexc { font-size: .85rem; color: var(--bad); }
+.gout { margin-top: 12px; }
+.comps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px; }
+.comp { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 1.05rem; }
+
+/* ---------- Perfekt ---------- */
+.klammer { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; align-items: flex-start; }
+.klammer > div { display: flex; flex-direction: column; gap: 4px; }
+.klammer small { color: var(--muted); font-size: .75rem; min-height: 1em; }
+.kb { font-size: 1.35rem; font-weight: 700; padding: 6px 12px; border-radius: 10px; background: var(--surface-2); }
+.kb-aux, .kb-pp { background: var(--accent-bg); color: var(--accent); }
+.kb-mid { font-weight: 500; }
+.pp-sep { color: var(--muted); font-style: italic; }
+.pp-ge { color: var(--accent); font-weight: 800; }
+.pp-end { color: var(--accent); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.ppex { margin-top: 6px; font-size: 1rem; }
 
 @media (max-width: 600px) {
   .weakrow { grid-template-columns: 1fr auto; }

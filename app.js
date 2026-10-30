@@ -84,7 +84,7 @@ function possTable(stem, hiGender, withNouns) {
 
 /* ---------- Routing ---------- */
 
-const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, tables: renderTables, practice: renderPractice };
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, genders: renderGenders, perfekt: renderPerfekt, tables: renderTables, practice: renderPractice };
 function route() {
   const r = location.hash.slice(1).split('/')[0] || 'cases';
   const key = ROUTES[r] ? r : 'cases';
@@ -700,6 +700,206 @@ function wwExercise({ s, q, prep, place, c, qa, qOpts, reason, pairNote }) {
 }
 
 /* =========================================================
+   DER · DIE · DAS (noun genders)
+   ========================================================= */
+
+const GART = { m: 'der', f: 'die', n: 'das', pl: 'die' };
+const gTag = (g, text) => `<span class="gt gt-${g}">${text || GART[g]}</span>`;
+const ruleExamples = (key, n = 3) => GENDER_NOUNS.filter(x => x.r === key && !x.x).slice(0, n).map(x => `${GART[x.g]} ${x.n}`).join(', ');
+
+function genderExplain(item) {
+  if (item.parts) {
+    const parts = item.parts.map(([p, g]) => `${p} <small>(${g ? (g === 'pl' ? 'plural' : GART[g]) : 'not a noun'})</small>`).join(' + ');
+    return `<b>Compound noun:</b> ${parts}. The <b>last part</b> decides → ${gTag(item.g)}`;
+  }
+  const rule = GENDER_RULES[item.r];
+  if (!rule) return `No ending rule for this one. Just learn it as <b>${GART[item.g]} ${item.n}</b>: say it out loud with the article a few times.`;
+  if (item.x) return `⚠️ <b>Exception!</b> Nouns with <b>${rule.label}</b> are ${rule.how} ${gTag(rule.g)}, but it's ${gTag(item.g)} ${item.n}. Learn this one by heart.`;
+  return `<b>${rule.label}</b> → ${rule.how} ${gTag(rule.g)}${rule.note ? `<br><small>${rule.note}</small>` : ''}<br><small>More like this: ${ruleExamples(item.r)}</small>`;
+}
+
+// Ending checker: known word → compound with a known last part → ending rules
+function guessGender(word) {
+  const w = word.trim().replace(/^(der|die|das)\s+/i, '');
+  if (w.length < 2) return null;
+  const lw = w.toLowerCase();
+  const name = cap(w);
+  const all = GENDER_NOUNS.concat(COMPOUNDS);
+  const known = all.find(x => x.n.toLowerCase() === lw);
+  if (known) return { g: known.g, name: known.n, html: `✓ In the word list (${known.en}). ${genderExplain(known)}` };
+
+  // Exceptions don't count as a last part: Legende is not a compound of Ende
+  const tail = all.filter(x => !x.x && x.n.length >= 3 && lw.length >= x.n.length + 3 && lw.endsWith(x.n.toLowerCase()))
+    .sort((a, b) => b.n.length - a.n.length)[0];
+  if (tail) return { g: tail.g, name, html: `Looks like a compound ending in <b>${tail.n}</b> (${GART[tail.g]} ${tail.n}). The last part decides.` };
+
+  const byRule = (suffix, key) => {
+    const r = GENDER_RULES[key];
+    return { g: r.g, name, html: `${suffix ? `Ends in <b>-${suffix}</b>` : 'Starts with <b>Ge-</b>'} → ${r.how} ${gTag(r.g)} <small>(rule: ${r.label})</small>${r.note ? `<br><small>${r.note}</small>` : ''}` };
+  };
+  const matches = SUFFIX_RULES.filter(([s]) => lw.length > s.length + 1 && lw.endsWith(s));
+  // Strong endings (-chen … -ion) beat Ge-; Ge- beats weak endings like -e
+  const strong = matches.find(([s]) => SUFFIX_RULES.findIndex(([x]) => x === s) <= 10);
+  if (strong) return byRule(...strong);
+  if (lw.startsWith('ge') && lw.length > 4) return byRule('', 'ge');
+  if (matches.length) return byRule(...matches[0]);
+  return { g: null, name, html: 'No ending rule found. Learn this one with its article!' };
+}
+
+function renderGenders() {
+  const col = g => {
+    const rules = Object.keys(GENDER_RULES).filter(k => GENDER_RULES[k].g === g);
+    return `<div class="gcol"><div class="ghead gt-${g}">${GART[g]} <small>${GENDERS[g].name}</small></div>
+      ${rules.map(k => {
+        const r = GENDER_RULES[k];
+        const exc = GENDER_NOUNS.filter(x => x.r === k && x.x).map(x => `${GART[x.g]} ${x.n}`).join(', ');
+        return `<div class="grule"><div class="glabel">${r.label} <span class="how">${r.how}</span></div>
+          <div class="gex">${ruleExamples(k)}</div>${exc ? `<div class="gexc">⚠️ ${exc}</div>` : ''}</div>`;
+      }).join('')}</div>`;
+  };
+  const compCards = COMPOUNDS.slice(0, 6).map(c => `<div class="comp">${c.parts.map(([p, g]) => g ? `${gTag(g, g === 'pl' ? 'die (pl.)' : GART[g])} ${p}` : `<span class="muted">${p}</span>`).join(' + ')} → ${gTag(c.g)} <b>${c.n}</b></div>`).join('');
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>der · die · das: noun genders</h2>
+    <p class="lead">Every German noun is <b>masculine, feminine or neuter</b>, and every case ending in this app depends on it. Always learn a noun <b>with its article</b>. The good news: many endings give the gender away.</p>
+    <div class="gcols">${col('m')}${col('f')}${col('n')}</div>
+  </section>
+
+  <section class="card">
+    <h2>Ending checker</h2>
+    <p class="muted">Type any German noun. It checks the word list, then compound parts, then the ending rules.</p>
+    <div class="typerow"><input type="text" id="gInput" placeholder="e.g. Zeitung, Häuschen, Küchentür" autocomplete="off" spellcheck="false"></div>
+    <div id="gOut" class="gout"><span class="muted">Try: Freundschaft, Kätzchen, Optimismus, Gebirge, Schreibtischlampe …</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Compound nouns: the last part decides</h2>
+    <p class="muted">German glues words together. Only the <b>last</b> word counts for the gender.</p>
+    <div class="comps">${compCards}</div>
+  </section>
+
+  <section class="card">
+    <h2>Tips</h2>
+    <div class="tips">
+      <div class="tip"><b>Plural is always die</b><i>der Hund → die Hunde, das Kind → die Kinder.</i> (Then the case endings follow the plural column.)</div>
+      <div class="tip"><b>People: natural gender, mostly</b><i>der Mann, die Frau</i>, but <i>das Mädchen</i> (-chen) and <i>das Kind</i>.</div>
+      <div class="tip"><b>Many common words have no rule</b><i>der Tisch, die Tür, das Haus.</i> Learn them with the article, maybe with a colour or picture for each gender.</div>
+      <div class="tip"><b>Rules beat feelings</b>Gender is grammar, not meaning: <i>die Sonne</i> (sun) and <i>der Mond</i> (moon).</div>
+    </div>
+  </section>`;
+
+  $('#gInput').addEventListener('input', e => {
+    const r = guessGender(e.target.value);
+    $('#gOut').innerHTML = r
+      ? `<div class="build-out">${r.g ? gTag(r.g) : '<span class="gt">???</span>'} ${esc(r.name)}</div><p>${r.html}</p>`
+      : '<span class="muted">Type a noun…</span>';
+  });
+}
+
+/* =========================================================
+   PERFEKT
+   ========================================================= */
+
+const auxInf = v => v.aux === 's' ? 'sein' : 'haben';
+
+// Participle split into prefix · ge · stem · ending, for colouring
+function ppParts(v) {
+  let rest = v.pp;
+  let sep = '';
+  let ge = '';
+  if (v.sep && rest.startsWith(v.sep)) { sep = v.sep; rest = rest.slice(sep.length); }
+  if (v.type !== 'insep' && v.type !== 'ieren' && rest.startsWith('ge')) { ge = 'ge'; rest = rest.slice(2); }
+  const end = /en$/.test(rest) ? 'en' : /[td]et$/.test(rest) ? 'et' : 't';
+  const stem = rest.slice(0, rest.length - end.length);
+  return `<span class="pp"><span class="pp-sep">${sep}</span><span class="pp-ge">${ge}</span>${stem}<span class="pp-end">${end}</span></span>`;
+}
+
+// Typical wrong participles: regular instead of irregular, ge- in the wrong place …
+function ppDistractors(v) {
+  const sep = v.sep || '';
+  const base = v.inf.replace(/^sich /, '').slice(sep.length);
+  const stem = base.replace(/e?n$/, '');
+  const noGe = v.type === 'insep' || v.type === 'ieren';
+  const ge = noGe ? '' : 'ge';
+  const geMistake = noGe ? 'ge' + v.pp : sep ? 'ge' + sep + v.pp.slice(sep.length + 2) : v.pp.replace(/^ge/, '');
+  return uniq([sep + ge + stem + (/[td]$/.test(stem) ? 'et' : 't'), sep + ge + stem + 'en', geMistake]).filter(x => x !== v.pp);
+}
+
+const perf = { verb: 'gehen' };
+
+function renderPerfekt() {
+  const typeCard = t => {
+    const ex = PERFEKT_VERBS.filter(v => v.type === t).slice(0, 3);
+    return `<div class="tip"><b>${PP_TYPES[t].label}</b>${PP_TYPES[t].rule}<div class="ppex">${ex.map(v => `${v.inf} → ${ppParts(v)}`).join('<br>')}</div></div>`;
+  };
+  const verbsBy = why => PERFEKT_VERBS.filter(v => v.why === why).map(v => v.inf).join(', ');
+
+  app.innerHTML = `
+  <section class="card">
+    <h2>Perfekt: talking about the past</h2>
+    <p class="lead">In spoken German, the Perfekt is used for almost everything in the past. It has two parts: <b>haben or sein</b> in position 2, and the <b>participle</b> at the very end.</p>
+    <div class="klammer">
+      <div><span class="kb">Ich</span><small>position 1</small></div>
+      <div><span class="kb kb-aux">habe</span><small>2: haben / sein</small></div>
+      <div><span class="kb kb-mid">gestern einen Film</span><small>everything else</small></div>
+      <div><span class="kb kb-pp">gesehen</span><small>end: participle</small></div>
+    </div>
+    <div class="klammer">
+      <div><span class="kb kb-aux">Bist</span><small>question: verb first</small></div>
+      <div><span class="kb">du</span><small></small></div>
+      <div><span class="kb kb-mid">gestern ins Kino</span><small></small></div>
+      <div><span class="kb kb-pp">gegangen</span><small>still at the end</small></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>haben or sein?</h2>
+    <p class="muted">Most verbs take haben. Learn the three groups that take sein:</p>
+    <div class="wowohin">
+      <div class="ww akk"><div class="big">🚶 Movement A → B</div><p>→ <b>sein</b><br><small>${verbsBy('move')}</small></p></div>
+      <div class="ww akk"><div class="big">🔄 Change of state</div><p>→ <b>sein</b><br><small>${verbsBy('change')}</small></p></div>
+      <div class="ww akk"><div class="big">🧍 sein &amp; bleiben</div><p>→ <b>sein</b><br><small>${verbsBy('stay')}</small></p></div>
+      <div class="ww dat"><div class="big">✋ Everything else</div><p>→ <b>haben</b><br><small>All verbs with an Akkusativ object, all reflexive verbs, and verbs like schlafen, arbeiten, wohnen, warten.</small></p></div>
+    </div>
+    <div class="tips">
+      <div class="tip"><b>An Akkusativ object means haben</b><i>Ich <u>bin</u> nach Berlin gefahren</i> (movement) vs <i>Ich <u>habe</u> das Auto gefahren</i> (I drove the car: Akk object).</div>
+      <div class="tip"><b>schlafen vs einschlafen</b><i>Ich habe gut geschlafen</i> (no change) vs <i>Ich bin sofort eingeschlafen</i> (change: awake → asleep).</div>
+      <div class="tip"><b>tanzen, schwimmen …</b>Moving around in one place = haben (<i>Wir haben getanzt</i>). Going somewhere = sein (<i>Ich bin über den See geschwommen</i>).</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Building the participle</h2>
+    <div class="legend"><span class="pp"><span class="pp-sep">prefix</span></span><span class="pp"><span class="pp-ge">ge</span></span><span>stem</span><span class="pp"><span class="pp-end">ending</span></span></div>
+    <div class="tips">${PP_TYPE_KEYS.map(typeCard).join('')}</div>
+  </section>
+
+  <section class="card">
+    <h2>Participle builder</h2>
+    <p class="muted">Pick a verb to see its participle, haben or sein, and every form.</p>
+    <div id="perfBuilder"></div>
+  </section>`;
+
+  drawPerfBuilder();
+}
+
+function drawPerfBuilder() {
+  const v = PERFEKT_VERBS.find(x => x.inf === perf.verb) || PERFEKT_VERBS[0];
+  const rows = ['ich', 'du', 'er', 'wir', 'ihr', 'siePl', 'Sie'].map(k => {
+    const label = k === 'er' ? 'er / sie / es' : PRONOUNS[k].label;
+    return `<tr><th>${label}</th><td>${CONJ[auxInf(v)][k]} ${v.refl ? REFL[k].akk + ' ' : ''}… <b>${v.pp}</b></td></tr>`;
+  }).join('');
+  $('#perfBuilder').innerHTML = `
+    ${PP_TYPE_KEYS.map(t => `<h4>${PP_TYPES[t].label}</h4><div class="chips">${PERFEKT_VERBS.filter(x => x.type === t).map(x => `<button class="chipbtn ${x === v ? 'on' : ''}" data-verb="${x.inf}">${x.inf}</button>`).join('')}</div>`).join('')}
+    <div class="build-out">${v.inf} → ${ppParts(v)}</div>
+    <p><b>${auxInf(v)}</b>: ${AUX_WHY[v.why]}. <b>${PP_TYPES[v.type].label}</b>: ${PP_TYPES[v.type].rule}${v.note ? `<br><small>${v.note}</small>` : ''}</p>
+    <div class="tw"><table><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="margin-top:8px">Example: ${v.s.replace('{S}', 'Ich').replace('{AUX}', `<b>${CONJ[auxInf(v)].ich}</b>`).replace('{R}', v.refl ? 'mich' : '').replace('{PP}', `<b>${v.pp}</b>`)}</p>`;
+  $$('#perfBuilder [data-verb]').forEach(b => b.addEventListener('click', () => { perf.verb = b.dataset.verb; drawPerfBuilder(); }));
+}
+
+/* =========================================================
    TABLES
    ========================================================= */
 
@@ -715,7 +915,7 @@ function renderTables() {
   app.innerHTML = `
   <section class="card">
     <h2>Tables</h2>
-    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a></div>
+    <div class="toc"><a href="#t-art" data-jump>Articles</a><a href="#t-pron" data-jump>Personal pronouns</a><a href="#t-stems" data-jump>Possessive words</a><a href="#t-poss" data-jump>Possessive endings</a><a href="#t-prep" data-jump>Prepositions</a><a href="#t-adj" data-jump>Adjective endings</a><a href="#t-refl" data-jump>Reflexive pronouns</a><a href="#t-perf" data-jump>Perfekt participles</a></div>
   </section>
 
   <section class="card" id="t-art">
@@ -778,6 +978,14 @@ function renderTables() {
     <h2>Reflexive pronouns</h2>
     <p class="muted">Highlighted: where the reflexive differs from the normal pronoun. Dativ is used when there is already a thing in Akkusativ (<i>Ich wasche mir die Hände</i>).</p>
     ${reflTable()}
+  </section>
+
+  <section class="card" id="t-perf">
+    <h2>Perfekt: participles and haben / sein</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Infinitive</th><th>Participle</th><th>haben / sein</th><th>Type</th></tr></thead>
+      <tbody>${PP_TYPE_KEYS.flatMap(t => PERFEKT_VERBS.filter(v => v.type === t)).map(v => `<tr><th>${v.inf}<span class="sub">${v.en}</span></th><td class="f">${ppParts(v)}</td><td class="${v.aux === 's' ? 'f c-akk' : ''}">${auxInf(v)}</td><td class="muted">${PP_TYPES[v.type].label}</td></tr>`).join('')}</tbody>
+    </table></div>
   </section>`;
 
   drawPossBody();
@@ -829,6 +1037,8 @@ const MODES = {
   adj: { title: '✨ Adjective endings', d: 'der alte · ein alter · alter …' },
   refl: { title: '🪞 Reflexive', d: 'mich / mir / sich: myself or someone else?' },
   ww: { title: '📍 Wo or Wohin?', d: 'auf dem Tisch or auf den Tisch? im or ins?' },
+  genders: { title: '🏷️ der · die · das', d: 'Noun genders, ending rules, compounds.' },
+  perfekt: { title: '⏮️ Perfekt', d: 'haben or sein? gemacht, gegangen, aufgestanden …' },
   mix: { title: '🔀 Mix', d: 'All of the above.' },
   review: { title: '🎯 Weak spots', d: 'More of what you get wrong. Misses come back.' },
 };
@@ -1084,6 +1294,46 @@ const GEN = {
     };
   },
 
+  genders() {
+    const item = Math.random() < 0.2 ? rnd(COMPOUNDS) : rnd(GENDER_NOUNS);
+    return {
+      sub: item.g,
+      hint: `${item.e} <i>${item.en}</i>`,
+      sentence: `<span class="blank">___</span> ${item.n}`,
+      steps: [{ ask: 'der, die or das?', options: ['der', 'die', 'das'].map(v => ({ v, l: v })), answer: GART[item.g] }],
+      explain: `${genderExplain(item)}<div class="full">${gTag(item.g)} ${item.n}</div>`,
+    };
+  },
+
+  perfekt() {
+    const v = rnd(PERFEKT_VERBS);
+    const key = rnd(PRONOUN_KEYS.filter(k => k !== 'es'));
+    const P = PRONOUNS[key];
+    const ai = auxInf(v);
+    const other = ai === 'sein' ? 'haben' : 'sein';
+    const aux = CONJ[ai][key];
+    const fill = (a, p) => v.s.replace('{S}', cap(P.nom)).replace('{AUX}', a).replace('{R}', v.refl ? REFL[key].akk : '').replace('{PP}', p);
+    const blank = '<span class="blank">___</span>';
+    const ppOptions = typeMode() ? null : shuffle([v.pp, ...ppDistractors(v)]).map(x => ({ v: x, l: x }));
+    const check = value => ({ ok: value.trim().toLowerCase() === v.pp });
+    return {
+      sub: ai,
+      hint: `<b>${v.inf}</b> <small>(${v.en})</small> · subject: <b>${P.label}</b> <small>(${P.en})</small>`,
+      sentence: fill(blank, blank),
+      steps: [
+        { ask: 'haben or sein? Pick the right form.',
+          options: shuffle([{ v: aux, l: `${aux} <small>(${ai})</small>` }, { v: CONJ[other][key], l: `${CONJ[other][key]} <small>(${other})</small>` }]), answer: aux },
+        { ask: `Now the participle of <b>${v.inf}</b>.`, options: ppOptions, answer: v.pp, check },
+      ],
+      explain: `<ol>
+        <li><b>haben or sein?</b> ${v.inf}: ${AUX_WHY[v.why]} → ${P.label} <b>${aux}</b></li>
+        <li><b>Participle:</b> ${PP_TYPES[v.type].label}: ${PP_TYPES[v.type].rule} → ${ppParts(v)}</li>
+        <li>haben / sein goes in position 2, the participle to the very end.</li>
+        ${v.note ? `<li><small>${v.note}</small></li>` : ''}
+      </ol><div class="full">${fill(`<b>${aux}</b>`, `<b>${v.pp}</b>`)}</div>`,
+    };
+  },
+
   ww() {
     const toQ = q => q.replace(/^(Wohin|Woher|Wo) /, '{Q} ');
     if (Math.random() < 0.15) {
@@ -1152,7 +1402,7 @@ function newExercise() {
     return;
   }
   const mode = settings.mode === 'mix'
-    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww'])
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww', 'genders', 'genders', 'perfekt', 'perfekt'])
     : settings.mode;
   cur = { mode, ex: GEN[mode](), step: 0, results: [] };
   drawEx();
@@ -1234,12 +1484,12 @@ function record() {
   const bump = (obj, key) => { const s = obj[key] || (obj[key] = { c: 0, t: 0 }); s.t++; if (ok) s.c++; };
   bump(stats.modes, cur.mode);
   if (cur.ex.caseKey) bump(stats.cases, cur.ex.caseKey);
-  bump(stats.topics, topicKey(cur.mode, cur.ex.caseKey));
+  bump(stats.topics, topicKey(cur.mode, subOf(cur.ex)));
 
   if (!ok) {
     const wrong = cur.results.map((r, i) => r.ok ? null : toText(optionLabel(cur.ex.steps[i], r.value))).filter(Boolean).join(' · ');
     const text = summarize(cur.ex);
-    stats.mistakes = [{ topic: topicLabel(cur.mode, cur.ex.caseKey), text, wrong }, ...stats.mistakes.filter(m => m.text !== text)].slice(0, 15);
+    stats.mistakes = [{ topic: topicLabel(cur.mode, subOf(cur.ex)), text, wrong }, ...stats.mistakes.filter(m => m.text !== text)].slice(0, 15);
     // Each missed question comes back at most twice
     cur.ex.redos = (cur.ex.redos || 0) + 1;
     if (cur.ex.redos <= 2 && redoQueue.length < 10) redoQueue.push({ mode: cur.mode, ex: cur.ex, due: session.t + 3 });
@@ -1251,11 +1501,14 @@ function record() {
 
 /* ---------- Weak spots ---------- */
 
-const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww'];
+const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww', 'genders', 'perfekt'];
 // Cases each mode can produce (null = the mode has no case)
-const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'] };
+const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'], genders: ['m', 'f', 'n'], perfekt: ['haben', 'sein'] };
 const topicKey = (mode, c) => `${mode}:${c || '-'}`;
-const topicLabel = (mode, c) => `${MODES[mode].title}${c ? ` · ${CASES[c].name}` : ''}`;
+// Topic = mode + case, or mode + gender for der/die/das
+const subOf = ex => ex.caseKey || ex.sub;
+const SUB_LABEL = { m: 'der words', f: 'die words', n: 'das words', haben: 'haben verbs', sein: 'sein verbs' };
+const topicLabel = (mode, c) => `${MODES[mode].title}${c ? ` · ${CASES[c] ? CASES[c].name : SUB_LABEL[c]}` : ''}`;
 const emptyStats = () => ({ modes: {}, cases: {}, topics: {}, mistakes: [] });
 const loadStats = () => Object.assign(emptyStats(), store.get('stats', {}));
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
@@ -1303,7 +1556,7 @@ function pickTopic() {
 
 function reviewExercise() {
   // Never two repeats in a row; with a focus, only repeats from that topic
-  const inFocus = q => !reviewFocus || (q.mode === reviewFocus.mode && (!reviewFocus.c || q.ex.caseKey === reviewFocus.c));
+  const inFocus = q => !reviewFocus || (q.mode === reviewFocus.mode && (!reviewFocus.c || subOf(q.ex) === reviewFocus.c));
   const due = cur && cur.redo ? -1 : redoQueue.findIndex(q => q.due <= session.t && inFocus(q));
   if (due >= 0) {
     const { mode, ex } = redoQueue.splice(due, 1)[0];
@@ -1314,7 +1567,7 @@ function reviewExercise() {
   let ex;
   for (let n = 0; n < 60; n++) {
     ex = GEN[t.mode]();
-    if (!t.c || ex.caseKey === t.c) break;
+    if (!t.c || subOf(ex) === t.c) break;
   }
   const s = loadStats().topics[topicKey(t.mode, t.c)];
   const acc = s && s.t ? `${Math.round(100 * s.c / s.t)}% so far` : 'new for you';
