@@ -270,7 +270,34 @@ mark.tgt.dat { background: var(--dat-bg); color: var(--dat); } mark.tgt.gen { ba
 .vlist small { color: var(--muted); display: block; }
 .chipbtn:disabled { opacity: .35; cursor: not-allowed; }
 
+/* ---------- Wo? Wohin? ---------- */
+.pgrid9 { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.pcard9 { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+.pv { width: 120px; height: 80px; display: block; margin: 0 auto 6px; }
+.pv-box { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.pv-open { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linejoin: round; }
+.pv-leg { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
+.pv-ball { fill: var(--accent); }
+.pv-ground { stroke: var(--border); stroke-width: 2; }
+.pname { font-size: 1.3rem; font-weight: 800; margin-bottom: 4px; }
+.pname small { font-size: .85rem; font-weight: 400; color: var(--muted); }
+.pex { font-size: .95rem; margin: 4px 0; }
+
+/* ---------- Weak spots ---------- */
+.banner { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--accent-bg); color: var(--accent); border-radius: 999px; padding: 5px 14px; font-size: .9rem; font-weight: 600; margin-bottom: 12px; }
+.banner button { border: 0; background: transparent; color: var(--accent); cursor: pointer; text-decoration: underline; font-size: .85rem; padding: 0; }
+.weakrow { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.weakrow:last-child { border-bottom: 0; }
+.mistakes { list-style: none; padding: 0; margin: 6px 0 0; }
+.mistakes li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .95rem; }
+.mistakes li:last-child { border-bottom: 0; }
+.mistakes .muted { font-size: .8rem; }
+.ok-txt { color: var(--ok); font-weight: 700; }
+.bad-txt { color: var(--bad); }
+
 @media (max-width: 600px) {
+  .weakrow { grid-template-columns: 1fr auto; }
+  .weakrow button { grid-column: 1 / -1; justify-self: start; }
   .sigrow { grid-template-columns: 1fr; }
   .build-out { font-size: 1.5rem; }
   .card { padding: 16px; }

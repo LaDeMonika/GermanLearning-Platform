@@ -425,3 +425,96 @@ const MIRROR_VERBS = [
 
 // Groups, so "Tom & Lisa" and "Tom" never act on each other
 const GROUP_MEMBERS = { us: ['me', 'tom'], tomlisa: ['tom', 'lisa'], annaben: ['anna', 'ben'] };
+
+/* ---------- Two-way prepositions: Wo? → Dativ, Wohin? → Akkusativ ---------- */
+
+// Preposition + article short forms
+const CONTRACT = {
+  in: { dem: 'im', das: 'ins' },
+  an: { dem: 'am', das: 'ans' },
+  zu: { dem: 'zum', der: 'zur' },
+  bei: { dem: 'beim' },
+  von: { dem: 'vom' },
+};
+
+// Learn page cards. {x} marks the article (or short form) to highlight.
+const TWO_WAY = [
+  { p: 'an', en: 'on (a side), at', wo: 'Das Bild hängt an {der} Wand.', wohin: 'Ich hänge das Bild an {die} Wand.' },
+  { p: 'auf', en: 'on (top of)', wo: 'Das Buch liegt auf {dem} Tisch.', wohin: 'Ich lege das Buch auf {den} Tisch.' },
+  { p: 'hinter', en: 'behind', wo: 'Das Auto steht hinter {dem} Haus.', wohin: 'Ich fahre das Auto hinter {das} Haus.' },
+  { p: 'in', en: 'in, into', wo: 'Die Tasse steht {im} Schrank.', wohin: 'Ich stelle die Tasse in {den} Schrank.' },
+  { p: 'neben', en: 'next to', wo: 'Die Lampe steht neben {dem} Bett.', wohin: 'Ich stelle die Lampe neben {das} Bett.' },
+  { p: 'über', en: 'above, over', wo: 'Die Lampe hängt über {dem} Sofa.', wohin: 'Ich hänge die Lampe über {das} Sofa.' },
+  { p: 'unter', en: 'under', wo: 'Der Hund liegt unter {dem} Tisch.', wohin: 'Der Hund legt sich unter {den} Tisch.' },
+  { p: 'vor', en: 'in front of', wo: 'Das Fahrrad steht vor {der} Tür.', wohin: 'Ich stelle das Fahrrad vor {die} Tür.' },
+  { p: 'zwischen', en: 'between', wo: 'Die Katze sitzt zwischen {den} Stühlen.', wohin: 'Die Katze springt zwischen {die} Stühle.' },
+];
+
+const VERB_PAIRS = [
+  { wohin: 'legen', wohinEx: 'Ich lege das Buch auf {den} Tisch.', wo: 'liegen', woEx: 'Das Buch liegt auf {dem} Tisch.' },
+  { wohin: 'stellen', wohinEx: 'Ich stelle die Vase auf {den} Tisch.', wo: 'stehen', woEx: 'Die Vase steht auf {dem} Tisch.' },
+  { wohin: 'sich setzen', wohinEx: 'Ich setze mich auf {das} Sofa.', wo: 'sitzen', woEx: 'Ich sitze auf {dem} Sofa.' },
+  { wohin: 'hängen', wohinEx: 'Ich hänge das Bild an {die} Wand.', wo: 'hängen', woEx: 'Das Bild hängt an {der} Wand.' },
+  { wohin: 'stecken', wohinEx: 'Ich stecke den Schlüssel in {die} Tasche.', wo: 'stecken', woEx: 'Der Schlüssel steckt in {der} Tasche.' },
+  { wohin: 'gehen / fahren', wohinEx: 'Wir gehen in {den} Park.', wo: 'sein / wohnen / warten', woEx: 'Wir sind {im} Park.' },
+];
+
+// Things you can put somewhere
+const WW_THINGS = {
+  legen: [{ nom: 'das Buch', akk: 'das Buch' }, { nom: 'der Schlüssel', akk: 'den Schlüssel' }, { nom: 'das Handy', akk: 'das Handy' }, { nom: 'die Zeitung', akk: 'die Zeitung' }],
+  stellen: [{ nom: 'die Vase', akk: 'die Vase' }, { nom: 'die Lampe', akk: 'die Lampe' }, { nom: 'der Koffer', akk: 'den Koffer' }, { nom: 'das Glas', akk: 'das Glas' }],
+  haengen: [{ nom: 'das Bild', akk: 'das Bild' }, { nom: 'die Jacke', akk: 'die Jacke' }, { nom: 'der Spiegel', akk: 'den Spiegel' }],
+};
+
+// Each action has a Wohin version (movement → Akk) and a Wo version (position → Dat).
+// {T.nom}/{T.akk} = thing, {GO} = gehen/fahren, {B} = blank, {N} = place noun
+const WW_ACTIONS = {
+  lay: { kind: 'put', things: 'legen', pair: 'legen (to put down, movement) ↔ liegen (to lie, position)',
+    wohin: { s: 'Ich lege {T.akk} {B} {N}.', q: 'Wohin lege ich {T.akk}?' }, wo: { s: '{T.nom} liegt {B} {N}.', q: 'Wo liegt {T.nom}?' } },
+  stand: { kind: 'put', things: 'stellen', pair: 'stellen (to put upright, movement) ↔ stehen (to stand, position)',
+    wohin: { s: 'Ich stelle {T.akk} {B} {N}.', q: 'Wohin stelle ich {T.akk}?' }, wo: { s: '{T.nom} steht {B} {N}.', q: 'Wo steht {T.nom}?' } },
+  hang: { kind: 'hang', things: 'haengen', pair: 'hängen is both: Ich hänge … (movement) ↔ … hängt (position)',
+    wohin: { s: 'Ich hänge {T.akk} {B} {N}.', q: 'Wohin hänge ich {T.akk}?' }, wo: { s: '{T.nom} hängt {B} {N}.', q: 'Wo hängt {T.nom}?' } },
+  sit: { kind: 'sit', pair: 'sich setzen (to sit down, movement) ↔ sitzen (to sit, position)',
+    wohin: { s: 'Ich setze mich {B} {N}.', q: 'Wohin setze ich mich?' }, wo: { s: 'Ich sitze {B} {N}.', q: 'Wo sitze ich?' } },
+  go: { kind: 'go', pair: 'gehen / fahren (movement) ↔ sein / warten / sich treffen (position)',
+    wohin: { s: 'Wir {GO} {B} {N}.', q: 'Wohin {GO} wir?' },
+    wo: [{ s: 'Wir sind {B} {N}.', q: 'Wo sind wir?' }, { s: 'Wir treffen uns {B} {N}.', q: 'Wo treffen wir uns?' }, { s: 'Wir warten {B} {N}.', q: 'Wo warten wir?' }] },
+};
+
+// Places and which prepositions make sense for each kind of action
+const WW_PLACES = [
+  { n: 'Tisch', g: 'm', put: ['auf', 'unter', 'neben'], hang: ['über'] },
+  { n: 'Schrank', g: 'm', put: ['in', 'auf', 'neben'] },
+  { n: 'Regal', g: 'n', put: ['in', 'auf'] },
+  { n: 'Bett', g: 'n', put: ['auf', 'unter', 'neben'], hang: ['über'], sit: ['auf'] },
+  { n: 'Sofa', g: 'n', put: ['auf', 'hinter', 'neben'], hang: ['über'], sit: ['auf'] },
+  { n: 'Stuhl', g: 'm', put: ['auf', 'neben', 'unter'], sit: ['auf'] },
+  { n: 'Wand', g: 'f', hang: ['an'] },
+  { n: 'Tür', g: 'f', put: ['vor', 'hinter', 'neben'], hang: ['an'] },
+  { n: 'Fenster', g: 'n', put: ['vor', 'neben'], sit: ['an'] },
+  { n: 'Betten', g: 'pl', put: ['zwischen'] },
+  { n: 'Kinder', g: 'pl', dat: 'Kindern', sit: ['zwischen', 'neben'] },
+  { n: 'Küche', g: 'f', go: ['in'], goVerb: 'gehen' },
+  { n: 'Garten', g: 'm', go: ['in'], goVerb: 'gehen' },
+  { n: 'Stadt', g: 'f', go: ['in'], goVerb: 'fahren' },
+  { n: 'Kino', g: 'n', go: ['in'], goVerb: 'gehen' },
+  { n: 'Park', g: 'm', go: ['in'], goVerb: 'gehen' },
+  { n: 'Haus', g: 'n', go: ['in', 'hinter', 'vor'], goVerb: 'gehen' },
+  { n: 'Meer', g: 'n', go: ['an'], goVerb: 'fahren' },
+  { n: 'See', g: 'm', go: ['an'], goVerb: 'fahren' },
+  { n: 'Strand', g: 'm', go: ['an'], goVerb: 'gehen' },
+  { n: 'Berg', g: 'm', go: ['auf'], goVerb: 'gehen' },
+];
+
+// Traps: they look like the Wo/Wohin rule, but it doesn't decide the case
+const WW_TRAPS = [
+  { s: 'Ich gehe {B} Arzt.', p: 'zu', n: 'Arzt', g: 'm', c: 'dat', qa: 'Wohin', q: 'Wohin gehe ich?', why: '<b>zu</b> is not a two-way preposition. It is always Dativ, even with movement.' },
+  { s: 'Wir fahren {B} Bahnhof.', p: 'zu', n: 'Bahnhof', g: 'm', c: 'dat', qa: 'Wohin', q: 'Wohin fahren wir?', why: '<b>zu</b> is always Dativ, even with movement.' },
+  { s: 'Ich gehe {B} Post.', p: 'zu', n: 'Post', g: 'f', c: 'dat', qa: 'Wohin', q: 'Wohin gehe ich?', why: '<b>zu</b> is always Dativ: zu + der → zur.' },
+  { s: 'Sie kommt {B} Schule.', p: 'aus', n: 'Schule', g: 'f', c: 'dat', qa: 'Woher', q: 'Woher kommt sie?', why: '<b>aus</b> is always Dativ.' },
+  { s: 'Ich komme {B} Bäcker.', p: 'von', n: 'Bäcker', g: 'm', c: 'dat', qa: 'Woher', q: 'Woher komme ich?', why: '<b>von</b> is always Dativ: von + dem → vom.' },
+  { s: 'Ich bin {B} Bäcker.', p: 'bei', n: 'Bäcker', g: 'm', c: 'dat', qa: 'Wo', q: 'Wo bin ich?', why: '<b>bei</b> is always Dativ: bei + dem → beim.' },
+  { s: 'Wir kommen {B} Hotel an.', p: 'in', n: 'Hotel', g: 'n', c: 'dat', qa: 'Wo', q: 'Wo kommen wir an?', why: '<b>ankommen</b> answers Wo? (where you are when you arrive), so in → Dativ.' },
+  { s: 'Wir laufen {B} Park.', p: 'in', n: 'Park', g: 'm', c: 'dat', qa: 'Wo', q: 'Wo laufen wir?', why: 'Moving around <b>inside</b> a place (not into it) is still Wo? → Dativ. Compare: Wir laufen in den Park (into it).' },
+];

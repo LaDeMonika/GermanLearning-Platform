@@ -84,7 +84,7 @@ function possTable(stem, hiGender, withNouns) {
 
 /* ---------- Routing ---------- */
 
-const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, tables: renderTables, practice: renderPractice };
+const ROUTES = { cases: renderCases, perspective: renderPerspective, adjectives: renderAdjectives, reflexive: renderReflexive, wowohin: renderWoWohin, tables: renderTables, practice: renderPractice };
 function route() {
   const r = location.hash.slice(1).split('/')[0] || 'cases';
   const key = ROUTES[r] ? r : 'cases';
@@ -166,6 +166,7 @@ function renderCases() {
       <div class="ww dat"><div class="big c-dat">Wo? → Dativ</div><div class="pic">📕▬</div><p>Location, no change of place.<br><b>Das Buch liegt auf <span class="c-dat">dem</span> Tisch.</b><br><b>Ich bin in <span class="c-dat">der</span> Stadt.</b></p></div>
       <div class="ww akk"><div class="big c-akk">Wohin? → Akkusativ</div><div class="pic">📕➜▬</div><p>Movement / direction to a goal.<br><b>Ich lege das Buch auf <span class="c-akk">den</span> Tisch.</b><br><b>Ich gehe in <span class="c-akk">die</span> Stadt.</b></p></div>
     </div>
+    <p style="margin-top:12px"><a href="#wowohin">More on Wo? / Wohin?: all 9 prepositions, verb pairs and traps →</a></p>
   </section>`;
 }
 
@@ -574,6 +575,131 @@ function drawMirror() {
 }
 
 /* =========================================================
+   WO? WOHIN? (two-way prepositions)
+   ========================================================= */
+
+// Little picture: a grey reference object and a ball showing the position
+function prepSvg(p) {
+  const box = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3" class="pv-box"/>`;
+  const ball = (cx, cy, r = 7, extra = '') => `<circle cx="${cx}" cy="${cy}" r="${r}" class="pv-ball" ${extra}/>`;
+  const shapes = {
+    an: box(78, 6, 10, 68) + ball(70, 40),
+    auf: box(35, 42, 50, 30) + ball(60, 34),
+    hinter: ball(80, 36, 7, 'opacity=".55"') + box(35, 34, 45, 38),
+    in: `<path d="M35 32 V72 H85 V32" class="pv-open"/>` + ball(60, 63),
+    neben: box(22, 38, 46, 34) + ball(86, 65),
+    über: box(35, 46, 50, 26) + ball(60, 18),
+    unter: `<rect x="28" y="26" width="64" height="6" rx="2" class="pv-box"/><line x1="33" y1="32" x2="33" y2="74" class="pv-leg"/><line x1="87" y1="32" x2="87" y2="74" class="pv-leg"/>` + ball(60, 66),
+    vor: box(38, 22, 44, 40) + ball(60, 58, 9),
+    zwischen: box(12, 40, 30, 32) + box(78, 40, 30, 32) + ball(60, 65),
+  };
+  return `<svg viewBox="0 0 120 80" class="pv" aria-hidden="true">${shapes[p]}<line x1="4" y1="75" x2="116" y2="75" class="pv-ground"/></svg>`;
+}
+
+// "an {der} Wand" → highlight the marked article in the case colour
+const markArt = (s, c) => s.replace(/\{(.+?)\}/, `<b class="c-${c}">$1</b>`);
+
+function renderWoWohin() {
+  app.innerHTML = `
+  <section class="card">
+    <h2>Two-way prepositions: Wo? or Wohin?</h2>
+    <p class="lead">Nine prepositions can take <b>Dativ or Akkusativ</b>. You decide with one question: is something <b>staying in a place</b> or <b>moving to a place</b>?</p>
+    <div class="wowohin">
+      <div class="ww dat"><div class="big c-dat">📍 Wo? → Dativ</div><p>Position. Nothing changes place.<br><b>${markArt('Die Katze sitzt auf {dem} Tisch.', 'dat')}</b></p></div>
+      <div class="ww akk"><div class="big c-akk">➡️ Wohin? → Akkusativ</div><p>Movement to a new place, a goal.<br><b>${markArt('Die Katze springt auf {den} Tisch.', 'akk')}</b></p></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The nine prepositions</h2>
+    <div class="pgrid9">${TWO_WAY.map(t => `
+      <div class="pcard9">
+        ${prepSvg(t.p)}
+        <div class="pname">${t.p} <small>${t.en}</small></div>
+        <div class="pex"><span class="ct ct-dat">Wo?</span> ${markArt(t.wo, 'dat')}</div>
+        <div class="pex"><span class="ct ct-akk">Wohin?</span> ${markArt(t.wohin, 'akk')}</div>
+      </div>`).join('')}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Verb pairs</h2>
+    <p class="muted">The verb usually tells you the answer. Putting verbs are movement (Akk), being verbs are position (Dat).</p>
+    <div class="tw"><table>
+      <thead><tr><th class="col-akk">Wohin? → Akk<span class="sub">movement, an action</span></th><th class="col-dat">Wo? → Dat<span class="sub">position, a state</span></th></tr></thead>
+      <tbody>${VERB_PAIRS.map(v => `<tr><td><b>${v.wohin}</b><span class="sub">${markArt(v.wohinEx, 'akk')}</span></td><td><b>${v.wo}</b><span class="sub">${markArt(v.woEx, 'dat')}</span></td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Short forms</h2>
+    <div class="tw"><table>
+      <thead><tr><th></th><th class="col-dat">Wo? (Dativ)</th><th class="col-akk">Wohin? (Akkusativ)</th></tr></thead>
+      <tbody>
+        <tr><th>in</th><td class="f c-dat">im <span class="sub">= in dem · Ich bin im Park.</span></td><td class="f c-akk">ins <span class="sub">= in das · Ich gehe ins Kino.</span></td></tr>
+        <tr><th>an</th><td class="f c-dat">am <span class="sub">= an dem · Wir sind am Meer.</span></td><td class="f c-akk">ans <span class="sub">= an das · Wir fahren ans Meer.</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted" style="margin-top:8px">So <b>im / am</b> always mean Wo? and <b>ins / ans</b> always mean Wohin?</p>
+  </section>
+
+  <section class="card">
+    <h2>Watch out</h2>
+    <div class="tips">
+      <div class="tip"><b>zu, nach, aus, von, bei are not two-way</b>Always Dativ, even with movement: <i>Ich gehe <u>zum</u> Arzt. Ich fahre <u>zur</u> Arbeit.</i></div>
+      <div class="tip"><b>Moving inside a place = Wo?</b><i>Wir laufen <u>im</u> Park</i> (around in it) vs <i>Wir laufen <u>in den</u> Park</i> (into it).</div>
+      <div class="tip"><b>ankommen = Wo?</b><i>Wir kommen <u>im</u> Hotel an.</i> You ask where you are when you arrive.</div>
+      <div class="tip"><b>Fixed verb + preposition</b>These ignore Wo/Wohin, just learn them: <i>warten auf + Akk, denken an + Akk, Angst haben vor + Dat.</i></div>
+      <div class="tip"><b>Time → Dativ</b><i>am Montag, im Juli, vor einer Woche</i> (Wann? → Dativ)</div>
+    </div>
+  </section>`;
+}
+
+// Blank for preposition + article; uses the short form (im, ins, zum …) when there is one
+function wwParts(prep, c, g) {
+  const art = DEF_ART[c][g];
+  const short = CONTRACT[prep] && CONTRACT[prep][art];
+  return { art, short, answer: short || art };
+}
+
+function wwExercise({ s, q, prep, place, c, qa, qOpts, reason, pairNote }) {
+  const { art, short, answer } = wwParts(prep, c, place.g);
+  const noun = c === 'dat' && place.dat ? place.dat : place.n;
+  const fillB = x => cap(s.replace('{B}', short ? x : `${prep} ${x}`).replace('{N}', noun));
+  const qFilled = q.replace(/^\{Q\}/, qa);
+
+  let options = null;
+  if (!typeMode()) {
+    const arts = ['dem', 'das', 'der', 'die', 'den'];
+    options = short
+      ? uniq(arts.map(a => (CONTRACT[prep] && CONTRACT[prep][a]) || `${prep} ${a}`)).map(v => ({ v, l: v }))
+      : arts.map(v => ({ v, l: v }));
+  }
+  const check = value => {
+    const v = value.trim().replace(/\s+/g, ' ').toLowerCase();
+    if (v === answer) return { ok: true };
+    if (short && v === `${prep} ${art}`) return { ok: true, note: `Correct, but people almost always say <b>${short}</b>.` };
+    return { ok: false };
+  };
+
+  return {
+    caseKey: c,
+    sentence: fillB('<span class="blank">___</span>'),
+    steps: [
+      { ask: 'First ask the question. Which question word fits?', pre: `<div class="qline">${q.replace('{Q}', '<span class="blank">___</span>')}</div>`,
+        options: qOpts.map(v => ({ v, l: v + '?' })), answer: qa, after: `<i>${qFilled}</i>` },
+      { ask: short ? `Fill in <b>${prep}</b> + article. Use the short form.` : 'Fill in the article.', options, answer, check },
+    ],
+    explain: `<ol>
+      <li><b>Ask:</b> <i>${qFilled}</i> ${pairNote ? `<small>(${pairNote})</small>` : ''}</li>
+      <li><b>Case:</b> ${reason} → ${tag(c)}</li>
+      <li><b>Noun:</b> ${GENDERS[place.g].art} ${place.n} → ${GENDERS[place.g].name} → ${hl(c, art)}</li>
+      ${short ? `<li><b>Short form:</b> ${prep} + ${art} → ${hl(c, short)}</li>` : ''}
+    </ol><div class="full">${fillB(hl(c, answer))}</div>`,
+  };
+}
+
+/* =========================================================
    TABLES
    ========================================================= */
 
@@ -702,7 +828,9 @@ const MODES = {
   poss: { title: '🎁 Whose is it?', d: 'mein / sein / ihr … with the right ending.' },
   adj: { title: '✨ Adjective endings', d: 'der alte · ein alter · alter …' },
   refl: { title: '🪞 Reflexive', d: 'mich / mir / sich: myself or someone else?' },
+  ww: { title: '📍 Wo or Wohin?', d: 'auf dem Tisch or auf den Tisch? im or ins?' },
   mix: { title: '🔀 Mix', d: 'All of the above.' },
+  review: { title: '🎯 Weak spots', d: 'More of what you get wrong. Misses come back.' },
 };
 
 const session = { c: 0, t: 0, streak: 0 };
@@ -955,6 +1083,28 @@ const GEN = {
       explain: `${mirrorExplain(verb, doer, recv, L, answer)}<div class="full">${reflSentence(verb, kd, hl(verb.c, answer))}</div>`,
     };
   },
+
+  ww() {
+    const toQ = q => q.replace(/^(Wohin|Woher|Wo) /, '{Q} ');
+    if (Math.random() < 0.15) {
+      const t = rnd(WW_TRAPS);
+      return wwExercise({ s: t.s, q: toQ(t.q), prep: t.p, place: t, c: t.c, qa: t.qa, qOpts: ['Wo', 'Wohin', 'Woher'], reason: t.why });
+    }
+    const act = WW_ACTIONS[rnd(Object.keys(WW_ACTIONS))];
+    const place = rnd(WW_PLACES.filter(p => p[act.kind]));
+    const prep = rnd(place[act.kind]);
+    const dir = Math.random() < 0.5 ? 'wohin' : 'wo';
+    const tpl = Array.isArray(act[dir]) ? rnd(act[dir]) : act[dir];
+    const thing = act.things ? rnd(WW_THINGS[act.things]) : { nom: '', akk: '' };
+    const sub = str => str.replace('{T.akk}', thing.akk).replace('{T.nom}', thing.nom).replace('{GO}', place.goVerb || 'gehen');
+    const reason = dir === 'wo'
+      ? `<b>${prep}</b> is a two-way preposition, and this is a position (nothing moves to a new place) → Wo? → Dativ.`
+      : `<b>${prep}</b> is a two-way preposition, and this is movement to a goal → Wohin? → Akkusativ.`;
+    return wwExercise({
+      s: sub(tpl.s), q: toQ(cap(sub(tpl.q))), prep, place, c: dir === 'wo' ? 'dat' : 'akk',
+      qa: dir === 'wo' ? 'Wo' : 'Wohin', qOpts: ['Wo', 'Wohin'], reason, pairNote: act.pair,
+    });
+  },
 };
 
 function renderPractice() {
@@ -969,12 +1119,14 @@ function renderPractice() {
     </div>
   </section>
   <section class="card" id="ex"></section>
+  <section class="card" id="weak"></section>
   <section class="card" id="stats"></section>`;
 
   $('#modes').addEventListener('click', e => {
     const b = e.target.closest('[data-m]');
     if (!b) return;
     settings.mode = b.dataset.m; saveSettings();
+    reviewFocus = null;
     $$('.mode').forEach(x => x.classList.toggle('on', x === b));
     newExercise();
   });
@@ -989,12 +1141,18 @@ function renderPractice() {
   $('#optGender').addEventListener('change', e => { settings.gender = e.target.checked; saveSettings(); newExercise(); });
 
   newExercise();
+  drawWeak();
   drawStats();
 }
 
 function newExercise() {
+  if (settings.mode === 'review') {
+    cur = reviewExercise();
+    drawEx();
+    return;
+  }
   const mode = settings.mode === 'mix'
-    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl'])
+    ? rnd(['who', 'anrede', 'detective', 'detective', 'pron', 'pron', 'poss', 'poss', 'adj', 'adj', 'refl', 'refl', 'ww', 'ww'])
     : settings.mode;
   cur = { mode, ex: GEN[mode](), step: 0, results: [] };
   drawEx();
@@ -1011,6 +1169,7 @@ function drawEx() {
   const { ex } = cur;
   const finished = cur.results.length === ex.steps.length;
   let h = `<div class="ex-head"><span class="mode-tag">${MODES[cur.mode].title}</span><span class="score">Session <b>${session.c}/${session.t}</b> · Streak <b>${session.streak}</b>${session.streak >= 3 ? ' 🔥' : ''}</span></div>`;
+  if (cur.banner) h += `<div class="banner">${cur.banner}${reviewFocus && !cur.redo ? ' <button id="clearFocus">✕ all weak spots</button>' : ''}</div>`;
   if (ex.scene) h += ex.scene;
   if (ex.hint) h += `<div class="hint">${ex.hint}</div>`;
   if (ex.sentence) h += `<div class="sentence">${finished && ex.sentenceDone ? ex.sentenceDone : ex.sentence}</div>`;
@@ -1053,6 +1212,8 @@ function drawEx() {
   });
   const next = $('#next');
   if (next) { next.addEventListener('click', newExercise); next.focus({ preventScroll: true }); }
+  const clear = $('#clearFocus');
+  if (clear) clear.addEventListener('click', () => { reviewFocus = null; newExercise(); });
 }
 
 function answer(i, value) {
@@ -1069,32 +1230,137 @@ function record() {
   const ok = cur.results.every(r => r.ok);
   session.t++;
   if (ok) { session.c++; session.streak++; } else session.streak = 0;
-  const stats = store.get('stats', { modes: {}, cases: {} });
-  const m = stats.modes[cur.mode] || (stats.modes[cur.mode] = { c: 0, t: 0 });
-  m.t++; if (ok) m.c++;
-  if (cur.ex.caseKey) {
-    const c = stats.cases[cur.ex.caseKey] || (stats.cases[cur.ex.caseKey] = { c: 0, t: 0 });
-    c.t++; if (ok) c.c++;
+  const stats = loadStats();
+  const bump = (obj, key) => { const s = obj[key] || (obj[key] = { c: 0, t: 0 }); s.t++; if (ok) s.c++; };
+  bump(stats.modes, cur.mode);
+  if (cur.ex.caseKey) bump(stats.cases, cur.ex.caseKey);
+  bump(stats.topics, topicKey(cur.mode, cur.ex.caseKey));
+
+  if (!ok) {
+    const wrong = cur.results.map((r, i) => r.ok ? null : toText(optionLabel(cur.ex.steps[i], r.value))).filter(Boolean).join(' · ');
+    const text = summarize(cur.ex);
+    stats.mistakes = [{ topic: topicLabel(cur.mode, cur.ex.caseKey), text, wrong }, ...stats.mistakes.filter(m => m.text !== text)].slice(0, 15);
+    // Each missed question comes back at most twice
+    cur.ex.redos = (cur.ex.redos || 0) + 1;
+    if (cur.ex.redos <= 2 && redoQueue.length < 10) redoQueue.push({ mode: cur.mode, ex: cur.ex, due: session.t + 3 });
   }
   store.set('stats', stats);
   drawStats();
+  drawWeak();
+}
+
+/* ---------- Weak spots ---------- */
+
+const PRACTICE_MODES = ['who', 'anrede', 'detective', 'pron', 'poss', 'adj', 'refl', 'ww'];
+// Cases each mode can produce (null = the mode has no case)
+const MODE_CASES = { who: ['nom'], anrede: [null], detective: CASE_KEYS, pron: ['nom', 'akk', 'dat'], poss: CASE_KEYS, adj: CASE_KEYS, refl: ['akk', 'dat'], ww: ['akk', 'dat'] };
+const topicKey = (mode, c) => `${mode}:${c || '-'}`;
+const topicLabel = (mode, c) => `${MODES[mode].title}${c ? ` · ${CASES[c].name}` : ''}`;
+const emptyStats = () => ({ modes: {}, cases: {}, topics: {}, mistakes: [] });
+const loadStats = () => Object.assign(emptyStats(), store.get('stats', {}));
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const toText = html => { const d = document.createElement('div'); d.innerHTML = html; return d.textContent.replace(/\s+/g, ' ').trim(); };
+
+// Missed exercises come back a few questions later (this session only)
+const redoQueue = [];
+let reviewFocus = null; // { mode, c } when one weak spot was picked
+
+function summarize(ex) {
+  const d = document.createElement('div');
+  d.innerHTML = ex.explain;
+  const full = d.querySelector('.full');
+  if (full) return full.textContent.replace(/\s+/g, ' ').trim();
+  const answers = ex.steps.map(st => toText(optionLabel(st, st.answer))).join(' · ');
+  return `${toText(ex.sentenceDone || ex.sentence || ex.steps[0].ask)} → ${answers}`;
+}
+
+function allTopics(stats) {
+  return PRACTICE_MODES.flatMap(mode => MODE_CASES[mode]
+    .filter(c => settings.gen || c !== 'gen')
+    .map(c => {
+      const s = stats.topics[topicKey(mode, c)] || { c: 0, t: 0 };
+      // Smoothed error rate: an unseen topic counts as 50 %
+      return { mode, c, s, weakness: (s.t - s.c + 1) / (s.t + 2) };
+    }));
+}
+
+function weakSpots(stats, n) {
+  return allTopics(stats)
+    .filter(t => t.s.t >= 2 && t.s.c < t.s.t)
+    .sort((a, b) => a.s.c / a.s.t - b.s.c / b.s.t || b.s.t - a.s.t)
+    .slice(0, n);
+}
+
+// Weighted pick: the weaker the topic, the more often it comes up
+function pickTopic() {
+  if (reviewFocus) return reviewFocus;
+  const topics = allTopics(loadStats());
+  const total = topics.reduce((sum, t) => sum + t.weakness ** 2, 0);
+  let r = Math.random() * total;
+  for (const t of topics) { r -= t.weakness ** 2; if (r <= 0) return t; }
+  return topics[topics.length - 1];
+}
+
+function reviewExercise() {
+  // Never two repeats in a row; with a focus, only repeats from that topic
+  const inFocus = q => !reviewFocus || (q.mode === reviewFocus.mode && (!reviewFocus.c || q.ex.caseKey === reviewFocus.c));
+  const due = cur && cur.redo ? -1 : redoQueue.findIndex(q => q.due <= session.t && inFocus(q));
+  if (due >= 0) {
+    const { mode, ex } = redoQueue.splice(due, 1)[0];
+    ex.steps.forEach(st => { if (st.options) st.options = shuffle(st.options); });
+    return { mode, ex, step: 0, results: [], redo: true, banner: '🔁 Again: you missed this one a few questions ago' };
+  }
+  const t = pickTopic();
+  let ex;
+  for (let n = 0; n < 60; n++) {
+    ex = GEN[t.mode]();
+    if (!t.c || ex.caseKey === t.c) break;
+  }
+  const s = loadStats().topics[topicKey(t.mode, t.c)];
+  const acc = s && s.t ? `${Math.round(100 * s.c / s.t)}% so far` : 'new for you';
+  return { mode: t.mode, ex, step: 0, results: [], banner: `🎯 ${reviewFocus ? 'Focus' : 'Weak spot'}: ${topicLabel(t.mode, t.c)} · ${acc}` };
+}
+
+function drawWeak() {
+  const el = $('#weak');
+  if (!el) return;
+  const stats = loadStats();
+  const spots = weakSpots(stats, 5);
+  el.innerHTML = `<h3>🎯 Your weak spots</h3>
+    ${spots.length
+      ? `<div class="weaklist">${spots.map(t => `<div class="weakrow"><span>${topicLabel(t.mode, t.c)}</span><span class="muted">${t.s.c}/${t.s.t} · ${Math.round(100 * t.s.c / t.s.t)}%</span><button class="ghost" data-focus="${t.mode}|${t.c || ''}">Practise this</button></div>`).join('')}</div>`
+      : '<p class="muted">No weak spots yet. Answer some questions and the topics you miss most will show up here.</p>'}
+    ${stats.mistakes.length ? `<h4>Recent mistakes</h4><ul class="mistakes">${stats.mistakes.slice(0, 8).map(m => `<li><span class="muted">${esc(m.topic)}</span><br><span class="ok-txt">✓</span> ${esc(m.text)}${m.wrong ? ` <span class="bad-txt">(you: ${esc(m.wrong)})</span>` : ''}</li>`).join('')}</ul>` : ''}`;
+
+  $$('[data-focus]', el).forEach(b => b.addEventListener('click', () => {
+    const [mode, c] = b.dataset.focus.split('|');
+    reviewFocus = { mode, c: c || null };
+    settings.mode = 'review'; saveSettings();
+    $$('.mode').forEach(x => x.classList.toggle('on', x.dataset.m === 'review'));
+    newExercise();
+    $('#ex').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
 }
 
 function drawStats() {
   const el = $('#stats');
   if (!el) return;
-  const stats = store.get('stats', { modes: {}, cases: {} });
+  const stats = loadStats();
   const bar = (label, s, cls) => {
     const pct = s && s.t ? Math.round(100 * s.c / s.t) : 0;
     return `<div class="stat"><div class="row"><span>${label}</span><span>${s && s.t ? `${s.c}/${s.t} · ${pct}%` : '–'}</span></div><div class="bar ${cls || ''}"><i style="width:${pct}%"></i></div></div>`;
   };
   el.innerHTML = `<div class="ex-head"><h3 style="margin:0">Your progress (all time)</h3><button class="ghost" id="resetStats">Reset</button></div>
     <div class="statgrid">
-      <div>${Object.keys(MODES).filter(k => k !== 'mix').map(k => bar(MODES[k].title, stats.modes[k])).join('')}</div>
+      <div>${PRACTICE_MODES.map(k => bar(MODES[k].title, stats.modes[k])).join('')}</div>
       <div>${CASE_KEYS.map(c => bar(CASES[c].name, stats.cases[c], c)).join('')}</div>
     </div>`;
   $('#resetStats').addEventListener('click', () => {
-    if (confirm('Reset all progress?')) { store.set('stats', { modes: {}, cases: {} }); drawStats(); }
+    if (!confirm('Reset all progress?')) return;
+    store.set('stats', emptyStats());
+    redoQueue.length = 0;
+    drawStats();
+    drawWeak();
   });
 }
 
